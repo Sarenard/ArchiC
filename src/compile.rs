@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap, fmt::Write, fs, io::Write as IoWrite, path::PathBuf, process::{Command, Stdio, exit}
+    collections::HashMap, fmt::Write, fs, io::Write as IoWrite, path::PathBuf, process::{Command, Stdio}
 };
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -114,40 +114,25 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             // let color = if *i == 0 { "green" } else { "red" };
             //writeln!(out, "jump {};", color)?;
             writeln!(out, "; return {:?}", expr)?;
-            // we only use r0 and r1 that we restore after
-            writeln!(out, "push r0")?;
-            writeln!(out, "push r1")?;
             // main work
             compile_expr(out, expr, variables_table)?;
             writeln!(out, "pop r0")?;
             writeln!(out, "skip 1 ifne r0 0")?;
             writeln!(out, "jump green ; true")?;
             writeln!(out, "jump red ; false")?;
-            // restoration of registers
-            writeln!(out, "pop r1")?;
-            writeln!(out, "pop r0")?;
         }
         Stmt::Decl { ty, name, init: expr } => {
             assert!(*ty == Type::U32);
             writeln!(out, "; u32 {} = {:?}", name, expr)?;
-            // we only use r0 and r1 that we restore after
-            writeln!(out, "push r0")?;
-            writeln!(out, "push r1")?;
             // main work
             compile_expr(out, expr, variables_table)?;
             // r0 is the addr, r1 is the value
             writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
             writeln!(out, "store [r0] r1")?;
-            // restoration of registers
-            writeln!(out, "pop r1")?;
-            writeln!(out, "pop r0")?;
         }
         Stmt::If { cond, body } => {
             writeln!(out, "; if ({:?})", cond)?;
-            // we only use r0 and r1 that we restore after
-            writeln!(out, "push r0")?;
-            writeln!(out, "push r1")?;
             // main work
             compile_expr(out, cond, variables_table)?;
             let label = new_label();
@@ -167,30 +152,18 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             writeln!(out, "jump if_{}_end", label)?;
 
             writeln!(out, "if_{}_end:", label)?;
-            // restoration of registers
-            writeln!(out, "pop r1")?;
-            writeln!(out, "pop r0")?;
         },
         Stmt::Assign { name, value } => {
             writeln!(out, "; {} = {:?}", name, value)?;
-            // we only use r0 and r1 that we restore after
-            writeln!(out, "push r0")?;
-            writeln!(out, "push r1")?;
             // main work
             compile_expr(out, value, variables_table)?;
             // r0 is the addr, r1 is the value
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
             writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
             writeln!(out, "store [r0] r1")?;
-            // restoration of registers
-            writeln!(out, "pop r1")?;
-            writeln!(out, "pop r0")?;
         },
         Stmt::While { cond, body } => {
             writeln!(out, "; while ({:?})", cond)?;
-            // we only use r0 and r1 that we restore after
-            writeln!(out, "push r0")?;
-            writeln!(out, "push r1")?;
             // main work
             let label = new_label();
             writeln!(out, "while_{}_check:", label)?;
@@ -209,9 +182,6 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             writeln!(out, "jump while_{}_check", label)?;
 
             writeln!(out, "while_{}_end:", label)?;
-            // restoration of registers
-            writeln!(out, "pop r1")?;
-            writeln!(out, "pop r0")?;
         },
     }
 
