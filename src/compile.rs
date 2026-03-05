@@ -83,6 +83,14 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
 
             writeln!(out, "eq_{}_end:", label)?;
         },
+        Expr::Or(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            writeln!(out, "or r0 r0 r1")?;
+            writeln!(out, "push r0")?;
+        },
         Expr::BinNEq(exprleft, exprright) => {
             compile_expr(out, exprleft, variables_table)?;
             compile_expr(out, exprright, variables_table)?;
@@ -90,6 +98,86 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "pop r0")?;
             let label = new_label();
             writeln!(out, "skip 1 ifne r0 r1")?;
+            writeln!(out, "jump eq_{}_false", label)?;
+            writeln!(out, "jump eq_{}_true", label)?;
+    
+            writeln!(out, "eq_{}_true:", label)?;
+            writeln!(out, "push 1")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+    
+            writeln!(out, "eq_{}_false:", label)?;
+            writeln!(out, "push 0")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+
+            writeln!(out, "eq_{}_end:", label)?;
+        },
+        Expr::LE(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            let label = new_label();
+            writeln!(out, "skip 1 ifle r0 r1")?;
+            writeln!(out, "jump eq_{}_false", label)?;
+            writeln!(out, "jump eq_{}_true", label)?;
+    
+            writeln!(out, "eq_{}_true:", label)?;
+            writeln!(out, "push 1")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+    
+            writeln!(out, "eq_{}_false:", label)?;
+            writeln!(out, "push 0")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+
+            writeln!(out, "eq_{}_end:", label)?;
+        },
+        Expr::GE(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            let label = new_label();
+            writeln!(out, "skip 1 ifge r0 r1")?;
+            writeln!(out, "jump eq_{}_false", label)?;
+            writeln!(out, "jump eq_{}_true", label)?;
+    
+            writeln!(out, "eq_{}_true:", label)?;
+            writeln!(out, "push 1")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+    
+            writeln!(out, "eq_{}_false:", label)?;
+            writeln!(out, "push 0")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+
+            writeln!(out, "eq_{}_end:", label)?;
+        },
+        Expr::GT(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            let label = new_label();
+            writeln!(out, "skip 1 ifgt r0 r1")?;
+            writeln!(out, "jump eq_{}_false", label)?;
+            writeln!(out, "jump eq_{}_true", label)?;
+    
+            writeln!(out, "eq_{}_true:", label)?;
+            writeln!(out, "push 1")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+    
+            writeln!(out, "eq_{}_false:", label)?;
+            writeln!(out, "push 0")?;
+            writeln!(out, "jump eq_{}_end", label)?;
+
+            writeln!(out, "eq_{}_end:", label)?;
+        },
+        Expr::LT(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            let label = new_label();
+            writeln!(out, "skip 1 iflt r0 r1")?;
             writeln!(out, "jump eq_{}_false", label)?;
             writeln!(out, "jump eq_{}_true", label)?;
     

@@ -28,6 +28,11 @@ pub enum Tok {
     While,
     BinEq,
     BinNEq,
+    Or,
+    LE,
+    GE,
+    GT,
+    LT,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +44,11 @@ enum AddOp {
     RShift,
     BinEq,
     BinNEq,
+    Or,
+    LE,
+    GE,
+    GT,
+    LT,
 }
 
 fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
@@ -57,20 +67,28 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         .map(Tok::IntLit);
 
     let punct = choice((
+        just("==").to(Tok::BinEq),
+        just("!=").to(Tok::BinNEq),
+        just("<<").to(Tok::LShift),
+        just(">>").to(Tok::RShift),
+        just("<=").to(Tok::LE),
+        just(">=").to(Tok::GE),
+
+        // mono-char ensuite
         just('(').to(Tok::LParen),
         just(')').to(Tok::RParen),
         just('{').to(Tok::LBrace),
         just('}').to(Tok::RBrace),
         just(';').to(Tok::Semi),
-        // before = to not fail
-        just("==").to(Tok::BinEq),
-        just("!=").to(Tok::BinNEq),
+
+        just('<').to(Tok::LT),
+        just('>').to(Tok::GT),
         just('=').to(Tok::Eq),
+
         just('+').to(Tok::Plus),
         just('-').to(Tok::Minus),
         just('&').to(Tok::And),
-        just(">>").to(Tok::RShift),
-        just("<<").to(Tok::LShift),
+        just('|').to(Tok::Or),
     ));
 
     choice((ident, int, punct))
@@ -83,12 +101,6 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     let ident = select! { Tok::Ident(name) => name };
     let int = select! { Tok::IntLit(n) => n };
 
-    // atom = int | ident
-    let atom = choice((
-        int.map(Expr::Int),
-        ident.clone().map(Expr::Var),
-    ));
-
     let add_op = select! {
         Tok::Plus => AddOp::Plus,
         Tok::Minus => AddOp::Minus,
@@ -97,19 +109,42 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         Tok::LShift => AddOp::LShift,
         Tok::BinEq => AddOp::BinEq,
         Tok::BinNEq => AddOp::BinNEq,
+        Tok::Or => AddOp::Or,
+        Tok::LE => AddOp::LE,
+        Tok::GE => AddOp::GE,
+        Tok::GT => AddOp::GT,
+        Tok::LT => AddOp::LT,
     };
 
-    let expr = atom.clone()
-        .then(add_op.then(atom.clone()).repeated())
-        .foldl(|lhs, (op, rhs)| match op {
-            AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
-            AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
-            AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
-            AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
-            AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
-            AddOp::BinEq => Expr::BinEq(Box::new(lhs), Box::new(rhs)),
-            AddOp::BinNEq => Expr::BinNEq(Box::new(lhs), Box::new(rhs)),
-        });
+    let expr = recursive(|expr| {
+
+        let atom = choice((
+            int.map(Expr::Int),
+            ident.clone().map(Expr::Var),
+
+            // parenthèses
+            just(Tok::LParen)
+                .ignore_then(expr.clone())
+                .then_ignore(just(Tok::RParen)),
+        ));
+
+        atom.clone()
+            .then(add_op.then(atom).repeated())
+            .foldl(|lhs, (op, rhs)| match op {
+                AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
+                AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
+                AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
+                AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
+                AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
+                AddOp::BinEq => Expr::BinEq(Box::new(lhs), Box::new(rhs)),
+                AddOp::BinNEq => Expr::BinNEq(Box::new(lhs), Box::new(rhs)),
+                AddOp::Or => Expr::Or(Box::new(lhs), Box::new(rhs)),
+                AddOp::LE => Expr::LE(Box::new(lhs), Box::new(rhs)),
+                AddOp::GE => Expr::GE(Box::new(lhs), Box::new(rhs)),
+                AddOp::GT => Expr::GT(Box::new(lhs), Box::new(rhs)),
+                AddOp::LT => Expr::LT(Box::new(lhs), Box::new(rhs)),
+            })
+    });
 
     let ty = just(Tok::U32).to(Type::U32);
 
