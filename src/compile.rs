@@ -12,60 +12,60 @@ fn new_label() -> u64 {
 }
 
 // we only use r0 and r1 in this function
-fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<String, u32>) -> std::fmt::Result {
+fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_table : &HashMap<(String, String), u32>) -> std::fmt::Result {
     match expr {
         Expr::Int(i) => {
             writeln!(out, "push {};", &i)?;
         },
         Expr::Var(name) => {
             // r0 is the addr, r1 is the value
-            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
+            writeln!(out, "copy r0 {}", variables_table.get(&(fun_name.clone(), name.clone())).unwrap())?;
             writeln!(out, "load r1 [r0]")?;
             writeln!(out, "push r1")?;
         },
         Expr::Add(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "add r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::Sub(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "sub r0 r0 r1")?;
             writeln!(out, "push r0")?;
         }
         Expr::And(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "and r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::LShift(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "lsl r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::RShift(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "lsr r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::BinEq(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -84,16 +84,16 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "eq_{}_end:", label)?;
         },
         Expr::Or(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             writeln!(out, "or r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::BinNEq(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -112,8 +112,8 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "eq_{}_end:", label)?;
         },
         Expr::LE(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -132,8 +132,8 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "eq_{}_end:", label)?;
         },
         Expr::GE(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -152,8 +152,8 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "eq_{}_end:", label)?;
         },
         Expr::GT(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -172,8 +172,8 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
             writeln!(out, "eq_{}_end:", label)?;
         },
         Expr::LT(exprleft, exprright) => {
-            compile_expr(out, exprleft, variables_table)?;
-            compile_expr(out, exprright, variables_table)?;
+            compile_expr(out, exprleft, fun_name, variables_table)?;
+            compile_expr(out, exprright, fun_name, variables_table)?;
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
             let label = new_label();
@@ -196,14 +196,14 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
     Ok(())
 }
 
-fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String, u32>) -> std::fmt::Result {
+fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_table : &HashMap<(String, String), u32>) -> std::fmt::Result {
     match stmt {
         Stmt::Return(expr) => {
             // let color = if *i == 0 { "green" } else { "red" };
             //writeln!(out, "jump {};", color)?;
             writeln!(out, "; return {:?}", expr)?;
             // main work
-            compile_expr(out, expr, variables_table)?;
+            compile_expr(out, expr, fun_name, variables_table)?;
             writeln!(out, "pop r0")?;
             writeln!(out, "skip 1 ifne r0 0")?;
             writeln!(out, "jump green ; true")?;
@@ -213,16 +213,16 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             assert!(*ty == Type::U32);
             writeln!(out, "; u32 {} = {:?}", name, expr)?;
             // main work
-            compile_expr(out, expr, variables_table)?;
+            compile_expr(out, expr, fun_name, variables_table)?;
             // r0 is the addr, r1 is the value
-            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
+            writeln!(out, "copy r0 {}", variables_table.get(&(fun_name.clone(), name.clone())).unwrap())?;
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
             writeln!(out, "store [r0] r1")?;
         }
         Stmt::If { cond, body } => {
             writeln!(out, "; if ({:?})", cond)?;
             // main work
-            compile_expr(out, cond, variables_table)?;
+            compile_expr(out, cond, fun_name, variables_table)?;
             let label = new_label();
             // now we have on the stack the if condition, where should we jump?
             writeln!(out, "pop r0")?;
@@ -232,7 +232,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
 
             writeln!(out, "if_{}_true:", label)?;
             for smt in body {
-                compile_stmt(out, smt, variables_table)?;
+                compile_stmt(out, smt, fun_name, variables_table)?;
             }
             writeln!(out, "jump if_{}_end", label)?;
     
@@ -244,10 +244,10 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
         Stmt::Assign { name, value } => {
             writeln!(out, "; {} = {:?}", name, value)?;
             // main work
-            compile_expr(out, value, variables_table)?;
+            compile_expr(out, value, fun_name, variables_table)?;
             // r0 is the addr, r1 is the value
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
-            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
+            writeln!(out, "copy r0 {}", variables_table.get(&(fun_name.clone(), name.clone())).unwrap())?;
             writeln!(out, "store [r0] r1")?;
         },
         Stmt::While { cond, body } => {
@@ -255,7 +255,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             // main work
             let label = new_label();
             writeln!(out, "while_{}_check:", label)?;
-            compile_expr(out, cond, variables_table)?;
+            compile_expr(out, cond, fun_name, variables_table)?;
             // now we have on the stack the while condition, where should we jump?
             writeln!(out, "pop r0")?;
             writeln!(out, "skip 1 ifeq r0 0")?;
@@ -265,7 +265,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             writeln!(out, "while_{}_true:", label)?;
             // content of the while
             for smt in body {
-                compile_stmt(out, smt, variables_table)?;
+                compile_stmt(out, smt, fun_name, variables_table)?;
             }
             writeln!(out, "jump while_{}_check", label)?;
 
@@ -283,56 +283,58 @@ pub fn codegen(ast: Program) -> Result<String, String> {
     let mut main_func = String::new();
 
     let mut addr: u32 = 0; // start of the heap
-    let mut variables_table: HashMap<String, u32> = HashMap::new();
+    let mut variables_table: HashMap<(String, String), u32> = HashMap::new();
 
     // boucle sur les variables
-    for stmt in &ast.func.body {
-        match stmt {
-            Stmt::Decl { ty, name, init: _init } => {
-                match ty {
-                    Type::Void => {
-                        return Err(format!(
-                            "Invalid declaration: variable `{}` cannot have type `void`",
-                            name
-                        ));
-                    }
-                    Type::U32 => {
-                        if variables_table.contains_key(name) {
-                            continue;
+    for func in &ast.funcs {
+        for stmt in &func.body {
+            match stmt {
+                Stmt::Decl { ty, name, init: _init } => {
+                    match ty {
+                        Type::Void => {
+                            return Err(format!(
+                                "Invalid declaration: variable `{}` cannot have type `void`",
+                                name
+                            ));
                         }
-                        variables_table.insert(name.to_string(), addr);
-                        addr += 4;
+                        Type::U32 => {
+                            if variables_table.contains_key(&("main".into(), name.clone())) {
+                                continue;
+                            }
+                            variables_table.insert((func.name.clone(), name.to_string()), addr);
+                            addr += 4;
+                        }
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 
     println!("{:?}", variables_table);
 
-    match ast {
-        Program {
-            func: Function { name: _name, body },
-        } => {
-            writeln!(&mut main_func, "; init of stack").unwrap();
-            writeln!(&mut main_func, "let r0 0x00fffffc").unwrap();
-            writeln!(&mut main_func, "copy sp r0").unwrap();
-            writeln!(&mut main_func, "; main function").unwrap();
-            writeln!(&mut main_func, "main:").unwrap();
-
-            for stmt in body {
-                let mut line = String::new();
-                compile_stmt(&mut line, &stmt, &variables_table).unwrap();
-
-                for l in line.lines() {
-                    writeln!(&mut main_func, "    {}", l).unwrap();
-                }
+    for func in &ast.funcs {
+        let body = &func.body;
+        writeln!(&mut main_func, "{}:", &func.name).unwrap();
+        for stmt in body {
+            let mut line = String::new();
+            compile_stmt(&mut line, stmt, &func.name, &variables_table).unwrap();
+            
+            for l in line.lines() {
+                writeln!(&mut main_func, "    {}", l).unwrap();
             }
         }
+        writeln!(&mut main_func, "; end of func {}\n", &func.name).unwrap();
     }
 
-    let assembly_output = format!(r#"{}
+    let assembly_output = format!(r#"; init of stack
+let r0 0x00fffffc
+copy sp r0
+; main function
+jump main
+
+{}
+
 green:
     copy r3 0
     let r0 0x01000000

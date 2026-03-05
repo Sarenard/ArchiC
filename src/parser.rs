@@ -200,18 +200,23 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
 
     let block =
         just(Tok::LBrace)
-            .ignore_then(stmt.repeated());
+        .ignore_then(stmt.repeated())
+        .then_ignore(just(Tok::RBrace));
         
-    just(Tok::Void)
-        .ignore_then(ident)
+    let function =
+        just(Tok::Void)
+        .ignore_then(ident.clone())
         .then_ignore(just(Tok::LParen))
         .then_ignore(just(Tok::RParen))
         .then(block)
-        .then_ignore(just(Tok::RBrace))
-        .then_ignore(end())
-        .map(|(name, body)| Program {
-            func: Function { name, body },
-        })
+        .map(|(name, body)| Function { name, body });
+
+
+    function
+    .repeated()
+    .at_least(1)          // optionnel: exiger au moins 1 fonction
+    .then_ignore(end())
+    .map(|funcs| Program { funcs })
 }
 
 pub fn parse_program(input: &str) -> Result<Program, String> {
