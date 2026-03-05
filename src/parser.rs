@@ -1,25 +1,35 @@
 use chumsky::prelude::*;
 use std::hash::Hash;
 
-use crate::ast::{Function, Program, Stmt};
+use crate::ast::{Expr, Function, Program, Stmt, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tok {
     Void,
+    U32,
+    Return,
+
     Ident(String),
     IntLit(i64),
+
     LParen,
     RParen,
     LBrace,
     RBrace,
     Semi,
-    Return,
+    Eq,
+    Plus,
+    Minus,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AddOp { Plus, Minus }
 
 fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
     let ident = text::ident().map(|s: String| match s.as_str() {
         "void" => Tok::Void,
         "return" => Tok::Return,
+        "u32" => Tok::U32,
         _ => Tok::Ident(s),
     });
 
@@ -34,6 +44,9 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('{').to(Tok::LBrace),
         just('}').to(Tok::RBrace),
         just(';').to(Tok::Semi),
+        just('=').to(Tok::Eq),
+        just('+').to(Tok::Plus),
+        just('-').to(Tok::Minus),
     ));
 
     choice((ident, int, punct))
@@ -46,31 +59,58 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     let ident = select! { Tok::Ident(name) => name };
     let int = select! { Tok::IntLit(n) => n };
 
+    // atom = int | ident
+    let atom = choice((
+        int.map(Expr::Int),
+        ident.clone().map(Expr::Var),
+    ));
+
+    let add_op = select! {
+        Tok::Plus => AddOp::Plus,
+        Tok::Minus => AddOp::Minus,
+    };
+
+    let expr = atom.clone()
+        .then(add_op.then(atom.clone()).repeated())
+        .foldl(|lhs, (op, rhs)| match op {
+            AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
+            AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
+        });
+
+    let ty = just(Tok::U32).to(Type::U32);
+
+    // u32 x = expr;
+    let decl_stmt =
+        ty.then(ident.clone())
+          .then_ignore(just(Tok::Eq))
+          .then(expr.clone())
+          .then_ignore(just(Tok::Semi))
+          .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
+
     let return_stmt =
         just(Tok::Return)
-            .ignore_then(int)
+            .ignore_then(expr.clone())
             .then_ignore(just(Tok::Semi))
             .map(Stmt::Return);
 
-    let stmt = return_stmt;
+    let stmt = choice((decl_stmt, return_stmt));
 
     let block =
         just(Tok::LBrace)
-            .ignore_then(stmt.repeated())
-            .then_ignore(just(Tok::RBrace));
+            .ignore_then(stmt.repeated());
 
     just(Tok::Void)
         .ignore_then(ident)
         .then_ignore(just(Tok::LParen))
         .then_ignore(just(Tok::RParen))
         .then(block)
+        .then_ignore(just(Tok::RBrace))
         .then_ignore(end())
         .map(|(name, body)| Program {
             func: Function { name, body },
         })
 }
 
-/// Parse un programme mini-C: `int main() {}`
 pub fn parse_program(input: &str) -> Result<Program, String> {
     let tokens = lexer()
         .parse(input)

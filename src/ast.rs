@@ -10,6 +10,21 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Type {
+    Void,
+    U32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Expr {
+    Int(i64),
+    Var(String),
+    Add(Box<Expr>, Box<Expr>),
+    Sub(Box<Expr>, Box<Expr>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-    Return(i64),
+    Return(Expr),
+    Decl { ty: Type, name: String, init: Expr },
 }
