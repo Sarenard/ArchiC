@@ -1,8 +1,15 @@
 use std::{
     collections::HashMap, fmt::Write, fs, io::Write as IoWrite, path::PathBuf, process::{Command, Stdio, exit}
 };
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::{ast::*, parser};
+
+static GLOBAL_LABEL_NB: AtomicU64 = AtomicU64::new(0);
+
+fn new_label() -> u64 {
+    GLOBAL_LABEL_NB.fetch_add(1, Ordering::Relaxed)
+}
 
 // we only use r0 and r1 in this function
 fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<String, u32>) -> std::fmt::Result {
@@ -50,8 +57,8 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             compile_expr(out, expr, variables_table)?;
             writeln!(out, "pop r0")?;
             writeln!(out, "skip 1 ifne r0 0")?;
-            writeln!(out, "jump green")?;
-            writeln!(out, "jump red")?;
+            writeln!(out, "jump green ; true")?;
+            writeln!(out, "jump red ; false")?;
             // restoration of registers
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
@@ -72,6 +79,34 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
         }
+        Stmt::If { cond, body } => {
+            writeln!(out, "; if ({:?})", cond)?;
+            // we only use r0 and r1 that we restore after
+            writeln!(out, "push r0")?;
+            writeln!(out, "push r1")?;
+            // main work
+            compile_expr(out, cond, variables_table)?;
+            let label = new_label();
+            // now we have on the stack the if condition, should we jump?
+            writeln!(out, "pop r0")?;
+            writeln!(out, "skip 1 ifeq r0 0")?;
+            writeln!(out, "jump if_{}_true", label)?;
+            writeln!(out, "jump if_{}_false", label)?;
+
+            writeln!(out, "if_{}_true:", label)?;
+            for smt in body {
+                compile_stmt(out, smt, variables_table)?;
+            }
+            writeln!(out, "jump if_{}_end", label)?;
+            
+            writeln!(out, "if_{}_false:", label)?; // for else later 
+            writeln!(out, "jump if_{}_end", label)?;
+
+            writeln!(out, "if_{}_end:", label)?;
+            // restoration of registers
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+        },
     }
 
     Ok(())

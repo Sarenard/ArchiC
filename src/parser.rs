@@ -20,6 +20,8 @@ pub enum Tok {
     Eq,
     Plus,
     Minus,
+
+    If,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +32,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         "void" => Tok::Void,
         "return" => Tok::Return,
         "u32" => Tok::U32,
+        "if" => Tok::If,
         _ => Tok::Ident(s),
     });
 
@@ -93,12 +96,26 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             .then_ignore(just(Tok::Semi))
             .map(Stmt::Return);
 
-    let stmt = choice((decl_stmt, return_stmt));
+    let stmt = recursive(|stmt| {
+        let if_stmt =
+            just(Tok::If)
+                .ignore_then(just(Tok::LParen))
+                .ignore_then(expr.clone())
+                .then_ignore(just(Tok::RParen))
+                .then(
+                    just(Tok::LBrace)
+                        .ignore_then(stmt.clone().repeated())
+                        .then_ignore(just(Tok::RBrace))
+                )
+                .map(|(cond, body)| Stmt::If { cond, body });
+
+        choice((decl_stmt.clone(), return_stmt.clone(), if_stmt))
+    });
 
     let block =
         just(Tok::LBrace)
             .ignore_then(stmt.repeated());
-
+        
     just(Tok::Void)
         .ignore_then(ident)
         .then_ignore(just(Tok::LParen))

@@ -3,46 +3,50 @@ let r0 0x00fffffc
 copy sp r0
 ; main function
 main:
-    ; u32 x = Add(Int(0), Int(1))
+    ; u32 x = Int(1)
     push r0
     push r1
-    push 0;
     push 1;
-    pop r0
-    pop r1
-    add r0 r0 r1
-    push r0
     copy r0 0
     pop r1 ; the stack contains the value of x
     store [r0] r1
     pop r1
     pop r0
-    ; u32 y = Add(Var("x"), Int(1))
+    ; if (Var("x"))
     push r0
     push r1
     copy r0 0
     load r1 [r0]
     push r1
-    push 1;
     pop r0
-    pop r1
-    add r0 r0 r1
-    push r0
-    copy r0 4
-    pop r1 ; the stack contains the value of y
-    store [r0] r1
-    pop r1
-    pop r0
-    ; return Var("y")
+    skip 1 ifeq r0 0
+    jump if_0_true
+    jump if_0_false
+    if_0_true:
+    ; return Int(0)
     push r0
     push r1
-    copy r0 4
-    load r1 [r0]
-    push r1
+    push 0;
     pop r0
     skip 1 ifne r0 0
-    jump green
-    jump red
+    jump green ; true
+    jump red ; false
+    pop r1
+    pop r0
+    jump if_0_end
+    if_0_false:
+    jump if_0_end
+    if_0_end:
+    pop r1
+    pop r0
+    ; return Int(1)
+    push r0
+    push r1
+    push 1;
+    pop r0
+    skip 1 ifne r0 0
+    jump green ; true
+    jump red ; false
     pop r1
     pop r0
 

@@ -27,4 +27,5 @@ pub enum Expr {
 pub enum Stmt {
     Return(Expr),
     Decl { ty: Type, name: String, init: Expr },
+    If { cond: Expr, body: Vec<Stmt> },
 }
