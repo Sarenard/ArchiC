@@ -5,7 +5,9 @@ pub struct Program {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Function {
+    pub return_ty: Type,
     pub name: String,
+    pub params: Vec<(Type, String)>,
     pub body: Vec<Stmt>,
 }
 
@@ -31,6 +33,7 @@ pub enum Expr {
     GE(Box<Expr>, Box<Expr>),
     GT(Box<Expr>, Box<Expr>),
     LT(Box<Expr>, Box<Expr>),
+    Call { name : String, args: Vec<Expr> }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -40,4 +43,6 @@ pub enum Stmt {
     Assign { name: String, value: Expr },
     If { cond: Expr, body: Vec<Stmt> },
     While { cond: Expr, body: Vec<Stmt> },
+
+    Expr(Expr),
 }

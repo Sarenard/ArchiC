@@ -191,6 +191,41 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
 
             writeln!(out, "eq_{}_end:", label)?;
         },
+        Expr::Call { name, args } => {
+            /* 
+            Calling convention
+            The caller pushes the arguments left to right
+            Then calls the function
+            The function then unfolds the arguments into the variables
+            Then proceeds as normal
+            Example :
+                void f(x, y) {
+
+                }
+                void main() {
+                    f(1, 2)
+                }
+            Becomes (cleaned up of the bullshit of course):
+                main:
+                    push 1
+                    push 2
+                    jump f ; pushes the adress to the stack
+                    (*continuation of main*)
+                f:
+                    swap
+                    x := pop
+                    swap
+                    y := pop
+                    (*body*)
+                    ret
+            */
+            // push of args
+            for arg in args {
+                compile_expr(out, arg, fun_name, variables_table)?;
+            }
+            // call
+            writeln!(out, "call {}", name)?;
+        },
     }
 
     Ok(())
@@ -199,15 +234,14 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
 fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_table : &HashMap<(String, String), u32>) -> std::fmt::Result {
     match stmt {
         Stmt::Return(expr) => {
-            // let color = if *i == 0 { "green" } else { "red" };
-            //writeln!(out, "jump {};", color)?;
+            // we add the return value below the ret addr that is at the top of the stack
             writeln!(out, "; return {:?}", expr)?;
-            // main work
             compile_expr(out, expr, fun_name, variables_table)?;
             writeln!(out, "pop r0")?;
-            writeln!(out, "skip 1 ifne r0 0")?;
-            writeln!(out, "jump green ; true")?;
-            writeln!(out, "jump red ; false")?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "push r0")?;
+            writeln!(out, "push r1")?;
+            writeln!(out, "ret")?;
         }
         Stmt::Decl { ty, name, init: expr } => {
             assert!(*ty == Type::U32);
@@ -271,6 +305,11 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
 
             writeln!(out, "while_{}_end:", label)?;
         },
+        Stmt::Expr(expr) => {
+            writeln!(out, "; raw expr ({:?})", expr)?;
+            compile_expr(out, expr, fun_name, variables_table)?;
+            writeln!(out, "pop r0 ; pop to not grow the stack")?;
+        },
     }
 
     Ok(())
@@ -285,26 +324,55 @@ pub fn codegen(ast: Program) -> Result<String, String> {
     let mut addr: u32 = 0; // start of the heap
     let mut variables_table: HashMap<(String, String), u32> = HashMap::new();
 
-    // boucle sur les variables
+    fn ensure_not_void(ty: &Type, name: &str) -> Result<(), String> {
+        match ty {
+            Type::Void => Err(format!("Invalid declaration: variable `{}` cannot have type `void`", name)),
+            Type::U32 => Ok(()),
+        }
+    }
+
+    fn declare_var(
+        variables_table: &mut HashMap<(String, String), u32>,
+        func_name: &str,
+        var_name: &str,
+        ty: &Type,
+        addr: &mut u32,
+    ) -> Result<(), String> {
+        ensure_not_void(ty, var_name)?;
+
+        let key = (func_name.to_string(), var_name.to_string());
+        if variables_table.contains_key(&key) {
+            return Err(format!("Invalid declaration: variable `{}` already exists", var_name));
+        }
+
+        variables_table.insert(key, *addr);
+        *addr += 4;
+        Ok(())
+    }
+
     for func in &ast.funcs {
+        // params
+        for (param_ty, param_name) in &func.params {
+            declare_var(
+                &mut variables_table,
+                &func.name,
+                param_name,
+                param_ty,
+                &mut addr,
+            )?;
+        }
+
+        // decls dans le body
         for stmt in &func.body {
             match stmt {
-                Stmt::Decl { ty, name, init: _init } => {
-                    match ty {
-                        Type::Void => {
-                            return Err(format!(
-                                "Invalid declaration: variable `{}` cannot have type `void`",
-                                name
-                            ));
-                        }
-                        Type::U32 => {
-                            if variables_table.contains_key(&("main".into(), name.clone())) {
-                                continue;
-                            }
-                            variables_table.insert((func.name.clone(), name.to_string()), addr);
-                            addr += 4;
-                        }
-                    }
+                Stmt::Decl { ty, name, .. } => {
+                    declare_var(
+                        &mut variables_table,
+                        &func.name,
+                        name,
+                        ty,
+                        &mut addr,
+                    )?;
                 }
                 _ => {}
             }
@@ -314,24 +382,64 @@ pub fn codegen(ast: Program) -> Result<String, String> {
     println!("{:?}", variables_table);
 
     for func in &ast.funcs {
-        let body = &func.body;
         writeln!(&mut main_func, "{}:", &func.name).unwrap();
-        for stmt in body {
-            let mut line = String::new();
-            compile_stmt(&mut line, stmt, &func.name, &variables_table).unwrap();
-            
-            for l in line.lines() {
-                writeln!(&mut main_func, "    {}", l).unwrap();
+
+        let mut params = String::new();
+        writeln!(&mut params, "; params handling").unwrap();
+        for (param_ty, param_name) in &func.params {
+            // see the calling convention documented in the Call expr
+            ensure_not_void(param_ty, param_name)?;
+            writeln!(&mut params, "; set of {}", param_name).unwrap();
+            writeln!(&mut params, "pop r0").unwrap();
+            writeln!(&mut params, "pop r1").unwrap();
+            writeln!(&mut params, "push r0").unwrap();
+            // r1 is now our argument
+            writeln!(&mut params, "copy r0 {}", variables_table.get(&(func.name.clone(), param_name.clone())).unwrap()).unwrap();
+            writeln!(&mut params, "store [r0] r1").unwrap();
+        }
+        for l in params.lines() {
+            writeln!(&mut main_func, "    {}", l).unwrap();
+        }
+
+        let mut body = String::new();
+        for stmt in &func.body {
+            compile_stmt(&mut body, stmt, &func.name, &variables_table).unwrap();
+        }
+
+        // if we forgot to ret at this point
+        writeln!(&mut body, "; Oh no we got out of the scope !").unwrap();
+        match func.return_ty {
+            Type::Void => {
+                writeln!(&mut body, "; Eh its fine we are in a void func").unwrap();
+                writeln!(&mut body, "ret").unwrap();
+            },
+            _ => {
+                writeln!(&mut body, "; Oh no we are in trouble").unwrap();
+                // showing red for now
+                writeln!(&mut body, "jump red").unwrap();
             }
         }
+
+        for l in body.lines() {
+            writeln!(&mut main_func, "    {}", l).unwrap();
+        }
+
         writeln!(&mut main_func, "; end of func {}\n", &func.name).unwrap();
     }
 
     let assembly_output = format!(r#"; init of stack
 let r0 0x00fffffc
 copy sp r0
-; main function
-jump main
+; entrypoint
+jump _start
+_start:
+    ; no args possible for now
+    call main
+    ; handling of exit codes
+    pop r0
+    skip 1 ifne r0 0
+    jump green ; true
+    jump red ; false
 
 {}
 

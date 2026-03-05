@@ -33,6 +33,7 @@ pub enum Tok {
     GE,
     GT,
     LT,
+    Comma,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,6 +81,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('{').to(Tok::LBrace),
         just('}').to(Tok::RBrace),
         just(';').to(Tok::Semi),
+        just(',').to(Tok::Comma),
 
         just('<').to(Tok::LT),
         just('>').to(Tok::GT),
@@ -118,43 +120,67 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
 
     let expr = recursive(|expr| {
 
-        let atom = choice((
+        // parenthèses
+        let paren = just(Tok::LParen)
+            .ignore_then(expr.clone())
+            .then_ignore(just(Tok::RParen));
+
+        // args = expr (',' expr)*   (ou vide)
+        let args = expr
+            .clone()
+            .separated_by(just(Tok::Comma))
+            .allow_trailing()
+            .or_not()
+            .map(|opt| opt.unwrap_or_default());
+
+        // call = Ident '(' args ')'
+        let call = ident.clone()
+            .then_ignore(just(Tok::LParen))
+            .then(args)
+            .then_ignore(just(Tok::RParen))
+            .map(|(name, args)| Expr::Call { name, args });
+
+        // primary = call | int | var | (expr)
+        // IMPORTANT: call avant var, sinon `foo(...)` sera lu comme Var("foo") puis ça casse.
+        let primary = choice((
+            call,
             int.map(Expr::Int),
             ident.clone().map(Expr::Var),
-
-            // parenthèses
-            just(Tok::LParen)
-                .ignore_then(expr.clone())
-                .then_ignore(just(Tok::RParen)),
+            paren,
         ));
 
-        atom.clone()
-            .then(add_op.then(atom).repeated())
+        primary.clone()
+            .then(add_op.then(primary).repeated())
             .foldl(|lhs, (op, rhs)| match op {
                 AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
                 AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
                 AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
+                AddOp::Or => Expr::Or(Box::new(lhs), Box::new(rhs)),
                 AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
                 AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
                 AddOp::BinEq => Expr::BinEq(Box::new(lhs), Box::new(rhs)),
                 AddOp::BinNEq => Expr::BinNEq(Box::new(lhs), Box::new(rhs)),
-                AddOp::Or => Expr::Or(Box::new(lhs), Box::new(rhs)),
                 AddOp::LE => Expr::LE(Box::new(lhs), Box::new(rhs)),
                 AddOp::GE => Expr::GE(Box::new(lhs), Box::new(rhs)),
-                AddOp::GT => Expr::GT(Box::new(lhs), Box::new(rhs)),
                 AddOp::LT => Expr::LT(Box::new(lhs), Box::new(rhs)),
+                AddOp::GT => Expr::GT(Box::new(lhs), Box::new(rhs)),
             })
     });
 
-    let ty = just(Tok::U32).to(Type::U32);
+    let u32_ty = just(Tok::U32).to(Type::U32);
+    let ret_ty = choice((
+        just(Tok::Void).to(Type::Void),
+        just(Tok::U32).to(Type::U32),
+    ));
 
     // u32 x = expr;
     let decl_stmt =
-        ty.then(ident.clone())
-          .then_ignore(just(Tok::Eq))
-          .then(expr.clone())
-          .then_ignore(just(Tok::Semi))
-          .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
+        u32_ty.clone()
+        .then(ident.clone())
+        .then_ignore(just(Tok::Eq))
+        .then(expr.clone())
+        .then_ignore(just(Tok::Semi))
+        .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
 
     // x = expr;
     let assign_stmt =
@@ -169,6 +195,11 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             .ignore_then(expr.clone())
             .then_ignore(just(Tok::Semi))
             .map(Stmt::Return);
+
+    let expr_stmt =
+        expr.clone()
+        .then_ignore(just(Tok::Semi))
+        .map(Stmt::Expr);
 
     let stmt = recursive(|stmt| {
         let if_stmt =
@@ -195,28 +226,45 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
                 )
                 .map(|(cond, body)| Stmt::While { cond, body });
 
-        choice((decl_stmt.clone(), assign_stmt, return_stmt.clone(), if_stmt, while_stmt))
+        choice((decl_stmt.clone(), assign_stmt, return_stmt.clone(), if_stmt, while_stmt, expr_stmt.clone()))
     });
 
     let block =
         just(Tok::LBrace)
         .ignore_then(stmt.repeated())
         .then_ignore(just(Tok::RBrace));
+
+    let param =
+        u32_ty.clone()
+        .then(ident.clone())
+        .map(|(ty, name)| (ty, name));
+
+    let params =
+        param
+        .separated_by(just(Tok::Comma))
+        .allow_trailing()
+        .or_not()
+        .map(|p| p.unwrap_or_default());
         
     let function =
-        just(Tok::Void)
-        .ignore_then(ident.clone())
+        ret_ty
+        .then(ident.clone())
         .then_ignore(just(Tok::LParen))
+        .then(params)
         .then_ignore(just(Tok::RParen))
         .then(block)
-        .map(|(name, body)| Function { name, body });
-
+        .map(|(((return_ty, name), params), body)| Function {
+            return_ty,
+            name,
+            params,
+            body,
+        });
 
     function
-    .repeated()
-    .at_least(1)          // optionnel: exiger au moins 1 fonction
-    .then_ignore(end())
-    .map(|funcs| Program { funcs })
+        .repeated()
+        .at_least(1)          // optionnel: exiger au moins 1 fonction
+        .then_ignore(end())
+        .map(|funcs| Program { funcs })
 }
 
 pub fn parse_program(input: &str) -> Result<Program, String> {
