@@ -3,19 +3,19 @@ let r0 0x00fffffc
 copy sp r0
 ; main function
 main:
-    ; u32 a = Int(4)
+    ; u32 a = Int(8)
     push r0
     push r1
-    push 4;
+    push 8;
     copy r0 0
     pop r1 ; the stack contains the value of a
     store [r0] r1
     pop r1
     pop r0
-    ; u32 b = Int(7)
+    ; u32 b = Int(8)
     push r0
     push r1
-    push 7;
+    push 8;
     copy r0 4
     pop r1 ; the stack contains the value of b
     store [r0] r1
@@ -118,7 +118,7 @@ main:
     while_0_end:
     pop r1
     pop r0
-    ; u32 ok = Sub(Var("tot"), Int(56))
+    ; return BinNEq(Var("tot"), Int(56))
     push r0
     push r1
     copy r0 8
@@ -127,19 +127,16 @@ main:
     push 56;
     pop r1
     pop r0
-    sub r0 r0 r1
-    push r0
-    copy r0 12
-    pop r1 ; the stack contains the value of ok
-    store [r0] r1
-    pop r1
-    pop r0
-    ; return Var("ok")
-    push r0
-    push r1
-    copy r0 12
-    load r1 [r0]
-    push r1
+    skip 1 ifne r0 r1
+    jump eq_2_false
+    jump eq_2_true
+    eq_2_true:
+    push 1
+    jump eq_2_end
+    eq_2_false:
+    push 0
+    jump eq_2_end
+    eq_2_end:
     pop r0
     skip 1 ifne r0 0
     jump green ; true

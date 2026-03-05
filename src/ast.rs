@@ -24,6 +24,8 @@ pub enum Expr {
     And(Box<Expr>, Box<Expr>),
     LShift(Box<Expr>, Box<Expr>),
     RShift(Box<Expr>, Box<Expr>),
+    BinEq(Box<Expr>, Box<Expr>),
+    BinNEq(Box<Expr>, Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

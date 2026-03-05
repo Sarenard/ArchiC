@@ -26,6 +26,8 @@ pub enum Tok {
 
     If,
     While,
+    BinEq,
+    BinNEq,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +37,8 @@ enum AddOp {
     And,
     LShift,
     RShift,
+    BinEq,
+    BinNEq,
 }
 
 fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
@@ -58,6 +62,9 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('{').to(Tok::LBrace),
         just('}').to(Tok::RBrace),
         just(';').to(Tok::Semi),
+        // before = to not fail
+        just("==").to(Tok::BinEq),
+        just("!=").to(Tok::BinNEq),
         just('=').to(Tok::Eq),
         just('+').to(Tok::Plus),
         just('-').to(Tok::Minus),
@@ -88,6 +95,8 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         Tok::And => AddOp::And,
         Tok::RShift => AddOp::RShift,
         Tok::LShift => AddOp::LShift,
+        Tok::BinEq => AddOp::BinEq,
+        Tok::BinNEq => AddOp::BinNEq,
     };
 
     let expr = atom.clone()
@@ -98,6 +107,8 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
             AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
             AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
+            AddOp::BinEq => Expr::BinEq(Box::new(lhs), Box::new(rhs)),
+            AddOp::BinNEq => Expr::BinNEq(Box::new(lhs), Box::new(rhs)),
         });
 
     let ty = just(Tok::U32).to(Type::U32);
