@@ -26,19 +26,43 @@ fn compile_expr(out: &mut String, expr : &Expr, variables_table : &HashMap<Strin
         Expr::Add(exprleft, exprright) => {
             compile_expr(out, exprleft, variables_table)?;
             compile_expr(out, exprright, variables_table)?;
-            writeln!(out, "pop r0")?;
             writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
             writeln!(out, "add r0 r0 r1")?;
             writeln!(out, "push r0")?;
         },
         Expr::Sub(exprleft, exprright) => {
             compile_expr(out, exprleft, variables_table)?;
             compile_expr(out, exprright, variables_table)?;
-            writeln!(out, "pop r0")?;
             writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
             writeln!(out, "sub r0 r0 r1")?;
             writeln!(out, "push r0")?;
         }
+        Expr::And(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            writeln!(out, "and r0 r0 r1")?;
+            writeln!(out, "push r0")?;
+        },
+        Expr::LShift(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            writeln!(out, "lsl r0 r0 r1")?;
+            writeln!(out, "push r0")?;
+        },
+        Expr::RShift(exprleft, exprright) => {
+            compile_expr(out, exprleft, variables_table)?;
+            compile_expr(out, exprright, variables_table)?;
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+            writeln!(out, "lsr r0 r0 r1")?;
+            writeln!(out, "push r0")?;
+        },
     }
 
     Ok(())
@@ -87,7 +111,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             // main work
             compile_expr(out, cond, variables_table)?;
             let label = new_label();
-            // now we have on the stack the if condition, should we jump?
+            // now we have on the stack the if condition, where should we jump?
             writeln!(out, "pop r0")?;
             writeln!(out, "skip 1 ifeq r0 0")?;
             writeln!(out, "jump if_{}_true", label)?;
@@ -115,8 +139,8 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             // main work
             compile_expr(out, value, variables_table)?;
             // r0 is the addr, r1 is the value
-            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
+            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
             writeln!(out, "store [r0] r1")?;
             // restoration of registers
             writeln!(out, "pop r1")?;
@@ -124,7 +148,30 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
         },
         Stmt::While { cond, body } => {
             writeln!(out, "; while ({:?})", cond)?;
-            todo!()
+            // we only use r0 and r1 that we restore after
+            writeln!(out, "push r0")?;
+            writeln!(out, "push r1")?;
+            // main work
+            let label = new_label();
+            writeln!(out, "while_{}_check:", label)?;
+            compile_expr(out, cond, variables_table)?;
+            // now we have on the stack the while condition, where should we jump?
+            writeln!(out, "pop r0")?;
+            writeln!(out, "skip 1 ifeq r0 0")?;
+            writeln!(out, "jump while_{}_true", label)?;
+            writeln!(out, "jump while_{}_end", label)?;
+
+            writeln!(out, "while_{}_true:", label)?;
+            // content of the while
+            for smt in body {
+                compile_stmt(out, smt, variables_table)?;
+            }
+            writeln!(out, "jump while_{}_check", label)?;
+
+            writeln!(out, "while_{}_end:", label)?;
+            // restoration of registers
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
         },
     }
 

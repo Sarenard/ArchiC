@@ -20,13 +20,22 @@ pub enum Tok {
     Eq,
     Plus,
     Minus,
+    And,
+    LShift,
+    RShift,
 
     If,
     While,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum AddOp { Plus, Minus }
+enum AddOp { 
+    Plus, 
+    Minus,
+    And,
+    LShift,
+    RShift,
+}
 
 fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
     let ident = text::ident().map(|s: String| match s.as_str() {
@@ -52,6 +61,9 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('=').to(Tok::Eq),
         just('+').to(Tok::Plus),
         just('-').to(Tok::Minus),
+        just('&').to(Tok::And),
+        just(">>").to(Tok::RShift),
+        just("<<").to(Tok::LShift),
     ));
 
     choice((ident, int, punct))
@@ -73,6 +85,9 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     let add_op = select! {
         Tok::Plus => AddOp::Plus,
         Tok::Minus => AddOp::Minus,
+        Tok::And => AddOp::And,
+        Tok::RShift => AddOp::RShift,
+        Tok::LShift => AddOp::LShift,
     };
 
     let expr = atom.clone()
@@ -80,6 +95,9 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         .foldl(|lhs, (op, rhs)| match op {
             AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
             AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
+            AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
+            AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
+            AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
         });
 
     let ty = just(Tok::U32).to(Type::U32);
