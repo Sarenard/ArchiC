@@ -98,7 +98,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
                 compile_stmt(out, smt, variables_table)?;
             }
             writeln!(out, "jump if_{}_end", label)?;
-            
+    
             writeln!(out, "if_{}_false:", label)?; // for else later 
             writeln!(out, "jump if_{}_end", label)?;
 
@@ -106,6 +106,25 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, variables_table : &HashMap<String
             // restoration of registers
             writeln!(out, "pop r1")?;
             writeln!(out, "pop r0")?;
+        },
+        Stmt::Assign { name, value } => {
+            writeln!(out, "; {} = {:?}", name, value)?;
+            // we only use r0 and r1 that we restore after
+            writeln!(out, "push r0")?;
+            writeln!(out, "push r1")?;
+            // main work
+            compile_expr(out, value, variables_table)?;
+            // r0 is the addr, r1 is the value
+            writeln!(out, "copy r0 {}", variables_table.get(name).unwrap())?;
+            writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
+            writeln!(out, "store [r0] r1")?;
+            // restoration of registers
+            writeln!(out, "pop r1")?;
+            writeln!(out, "pop r0")?;
+        },
+        Stmt::While { cond, body } => {
+            writeln!(out, "; while ({:?})", cond)?;
+            todo!()
         },
     }
 

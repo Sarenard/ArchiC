@@ -22,6 +22,7 @@ pub enum Tok {
     Minus,
 
     If,
+    While,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +34,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         "return" => Tok::Return,
         "u32" => Tok::U32,
         "if" => Tok::If,
+        "while" => Tok::While,
         _ => Tok::Ident(s),
     });
 
@@ -90,6 +92,14 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
           .then_ignore(just(Tok::Semi))
           .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
 
+    // x = expr;
+    let assign_stmt =
+        ident.clone()
+        .then_ignore(just(Tok::Eq))
+        .then(expr.clone())
+        .then_ignore(just(Tok::Semi))
+        .map(|(name, value)| Stmt::Assign { name, value });
+
     let return_stmt =
         just(Tok::Return)
             .ignore_then(expr.clone())
@@ -109,7 +119,19 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
                 )
                 .map(|(cond, body)| Stmt::If { cond, body });
 
-        choice((decl_stmt.clone(), return_stmt.clone(), if_stmt))
+        let while_stmt =
+            just(Tok::While)
+                .ignore_then(just(Tok::LParen))
+                .ignore_then(expr.clone())
+                .then_ignore(just(Tok::RParen))
+                .then(
+                    just(Tok::LBrace)
+                        .ignore_then(stmt.clone().repeated())
+                        .then_ignore(just(Tok::RBrace))
+                )
+                .map(|(cond, body)| Stmt::While { cond, body });
+
+        choice((decl_stmt.clone(), assign_stmt, return_stmt.clone(), if_stmt, while_stmt))
     });
 
     let block =
