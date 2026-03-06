@@ -1,0 +1,7 @@
+u32 main() {
+    u32 x = 1;
+    u32* ptr = &x;
+    u32 y = *ptr;
+
+    return y != 1;
+}

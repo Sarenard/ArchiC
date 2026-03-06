@@ -1,0 +1,6 @@
+u32 main() {
+    u32 x = 1;
+    u32* ptr = &x;
+
+    return ptr != 0;
+}

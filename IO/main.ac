@@ -1,9 +1,14 @@
-u32 test(u32 x) {
-    return x;
+void fill_green() {
+    u32 mem = 0x01000000;
+
+    while (1) {
+        *mem = 0x0000FF00;
+        mem = mem + 4;
+    }
 }
 
 u32 main() {
-    u32 x = 1;
- 
-    return test(x);
+    fill_green();
+
+    return 0;
 }

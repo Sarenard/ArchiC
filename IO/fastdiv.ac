@@ -13,13 +13,13 @@ void main() {
     while (i > 0) {
         if (r >= (b << i)) {
             r = r - (b << i);
-            q = (1 << i) | q;
+            q = (1 << i) || q;
         }
         i = i - 1;
     }
     if (r >= (b << i)) {
         r = r - (b << i);
-        q = (1 << i) | q;
+        q = (1 << i) || q;
     }
     i = i - 1;
 

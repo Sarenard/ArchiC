@@ -15,7 +15,9 @@ fn new_label() -> u64 {
 fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_table : &HashMap<(String, String), u32>) -> std::fmt::Result {
     match expr {
         Expr::Int(i) => {
-            writeln!(out, "push {};", &i)?;
+            // if the val is too big we need to be a little smarter
+            writeln!(out, "let r0 {};", &i)?;
+            writeln!(out, "push r0;")?;
         },
         Expr::Var(name) => {
             // r0 is the addr, r1 is the value
@@ -226,6 +228,27 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
             // call
             writeln!(out, "call {}", name)?;
         },
+        Expr::AddrOf(expr) => {
+            match expr.as_ref() {
+                Expr::Var(name) => {
+                    let addr = variables_table.get(&(fun_name.clone(), name.clone())).unwrap();
+                    writeln!(out, "push {}", addr)?;
+                },
+                Expr::Deref(expr) => {
+                    // addrof \circ deref = id, we pass as if nothing happened
+                    // TODO : check if expr is a pointer (else we should probably fail)
+                    compile_expr(out, expr, fun_name, variables_table)?;
+                },
+                _ => panic!("Error : cannot get adress of {:?}", expr.as_ref()),
+            }
+        },
+        Expr::Deref(expr) => {
+            compile_expr(out, expr, fun_name, variables_table)?;
+            // now we need to push the value at 
+            writeln!(out, "pop r0")?;
+            writeln!(out, "load r1 [r0]")?;
+            writeln!(out, "push r1")?;
+        },
     }
 
     Ok(())
@@ -244,7 +267,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             writeln!(out, "ret")?;
         }
         Stmt::Decl { ty, name, init: expr } => {
-            assert!(*ty == Type::U32);
+            assert!(!(ty.base == BaseType::Void && ty.ptr == 0)); // we cant assign to void
             writeln!(out, "; u32 {} = {:?}", name, expr)?;
             // main work
             compile_expr(out, expr, fun_name, variables_table)?;
@@ -275,13 +298,41 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
 
             writeln!(out, "if_{}_end:", label)?;
         },
-        Stmt::Assign { name, value } => {
-            writeln!(out, "; {} = {:?}", name, value)?;
+        Stmt::Assign { target, value } => {
+            // TODO (typing) : check that the right side is not void?
+            
+            fn get_addr(
+                out: &mut String,
+                expr: &Expr,
+                variables_table: &HashMap<(String, String), u32>,
+                fun_name: &str,
+            ) -> std::fmt::Result {
+                match expr {
+                    Expr::Var(name) => {
+                        let addr = *variables_table
+                            .get(&(fun_name.to_string(), name.clone()))
+                            .unwrap();
+                        writeln!(out, "copy r0 {}", addr)?;
+                    }
+
+                    Expr::Deref(inner) => {
+                        get_addr(out, inner, variables_table, fun_name)?;
+                        writeln!(out, "load r0 [r0]")?;
+                    }
+
+                    _ => panic!("not an lvalue"),
+                }
+
+                Ok(())
+            }
+            
+            writeln!(out, "; {:?} = {:?}", target, value)?;
             // main work
             compile_expr(out, value, fun_name, variables_table)?;
             // r0 is the addr, r1 is the value
-            writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
-            writeln!(out, "copy r0 {}", variables_table.get(&(fun_name.clone(), name.clone())).unwrap())?;
+            writeln!(out, "pop r1 ; the stack contains the value of {:?}", target)?;
+            // we compute where to write (and put it in r0)
+            get_addr(out, target, &variables_table, &fun_name)?;
             writeln!(out, "store [r0] r1")?;
         },
         Stmt::While { cond, body } => {
@@ -325,9 +376,9 @@ pub fn codegen(ast: Program) -> Result<String, String> {
     let mut variables_table: HashMap<(String, String), u32> = HashMap::new();
 
     fn ensure_not_void(ty: &Type, name: &str) -> Result<(), String> {
-        match ty {
-            Type::Void => Err(format!("Invalid declaration: variable `{}` cannot have type `void`", name)),
-            Type::U32 => Ok(()),
+        match ty.base {
+            BaseType::Void => Err(format!("Invalid declaration: variable `{}` cannot have type `void`", name)),
+            BaseType::U32 => Ok(()),
         }
     }
 
@@ -409,7 +460,7 @@ pub fn codegen(ast: Program) -> Result<String, String> {
         // if we forgot to ret at this point
         writeln!(&mut body, "; Oh no we got out of the scope !").unwrap();
         match func.return_ty {
-            Type::Void => {
+            Type { base: BaseType::Void, ptr: _ptr } => {
                 writeln!(&mut body, "; Eh its fine we are in a void func").unwrap();
                 writeln!(&mut body, "ret").unwrap();
             },

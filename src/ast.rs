@@ -12,15 +12,23 @@ pub struct Function {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Type {
-    Void,
-    U32,
+pub enum BaseType { Void, U32 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Type {
+    pub base: BaseType,
+    pub ptr: u32, // nombre de '*'
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
     Int(i64),
     Var(String),
+    Call { name : String, args: Vec<Expr> },
+
+    AddrOf(Box<Expr>),
+    Deref(Box<Expr>),
+
     Add(Box<Expr>, Box<Expr>),
     Sub(Box<Expr>, Box<Expr>),
     And(Box<Expr>, Box<Expr>),
@@ -33,14 +41,15 @@ pub enum Expr {
     GE(Box<Expr>, Box<Expr>),
     GT(Box<Expr>, Box<Expr>),
     LT(Box<Expr>, Box<Expr>),
-    Call { name : String, args: Vec<Expr> }
+
+
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     Return(Expr),
     Decl { ty: Type, name: String, init: Expr },
-    Assign { name: String, value: Expr },
+    Assign { target: Expr, value: Expr },
     If { cond: Expr, body: Vec<Stmt> },
     While { cond: Expr, body: Vec<Stmt> },
 

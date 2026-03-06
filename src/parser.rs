@@ -1,7 +1,7 @@
 use chumsky::prelude::*;
 use std::hash::Hash;
 
-use crate::ast::{Expr, Function, Program, Stmt, Type};
+use crate::ast::{BaseType, Expr, Function, Program, Stmt, Type};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Tok {
@@ -34,6 +34,8 @@ pub enum Tok {
     GT,
     LT,
     Comma,
+    Star,
+    AddrOf,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,10 +64,18 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         _ => Tok::Ident(s),
     });
 
-    let int = text::int(10)
+    let hex = just("0x")
+        .or(just("0X"))
+        .ignore_then(text::digits(16))
+        .map(|s: String| Tok::IntLit(i64::from_str_radix(&s, 16).unwrap()));
+
+    // base 10
+    let dec = text::int(10)
         .from_str()
         .unwrapped()
         .map(Tok::IntLit);
+
+    let int = choice((hex, dec));
 
     let punct = choice((
         just("==").to(Tok::BinEq),
@@ -74,6 +84,8 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just(">>").to(Tok::RShift),
         just("<=").to(Tok::LE),
         just(">=").to(Tok::GE),
+        just("&&").to(Tok::And),
+        just("||").to(Tok::Or),
 
         // mono-char ensuite
         just('(').to(Tok::LParen),
@@ -82,6 +94,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('}').to(Tok::RBrace),
         just(';').to(Tok::Semi),
         just(',').to(Tok::Comma),
+        just('*').to(Tok::Star),
 
         just('<').to(Tok::LT),
         just('>').to(Tok::GT),
@@ -89,8 +102,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
 
         just('+').to(Tok::Plus),
         just('-').to(Tok::Minus),
-        just('&').to(Tok::And),
-        just('|').to(Tok::Or),
+        just('&').to(Tok::AddrOf),
     ));
 
     choice((ident, int, punct))
@@ -101,6 +113,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
 
 fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     let ident = select! { Tok::Ident(name) => name };
+    
     let int = select! { Tok::IntLit(n) => n };
 
     let add_op = select! {
@@ -119,13 +132,12 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     };
 
     let expr = recursive(|expr| {
-
-        // parenthèses
+        // (expr)
         let paren = just(Tok::LParen)
             .ignore_then(expr.clone())
             .then_ignore(just(Tok::RParen));
 
-        // args = expr (',' expr)*   (ou vide)
+        // args = expr (',' expr)* | vide
         let args = expr
             .clone()
             .separated_by(just(Tok::Comma))
@@ -134,14 +146,14 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             .map(|opt| opt.unwrap_or_default());
 
         // call = Ident '(' args ')'
-        let call = ident.clone()
+        let call = ident
+            .clone()
             .then_ignore(just(Tok::LParen))
             .then(args)
             .then_ignore(just(Tok::RParen))
             .map(|(name, args)| Expr::Call { name, args });
 
         // primary = call | int | var | (expr)
-        // IMPORTANT: call avant var, sinon `foo(...)` sera lu comme Var("foo") puis ça casse.
         let primary = choice((
             call,
             int.map(Expr::Int),
@@ -149,12 +161,27 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             paren,
         ));
 
-        primary.clone()
-            .then(add_op.then(primary).repeated())
+        // unary = ('&' unary) | ('*' unary) | primary
+        let unary = recursive(|unary| {
+            choice((
+                just(Tok::AddrOf)
+                    .ignore_then(unary.clone())
+                    .map(|e| Expr::AddrOf(Box::new(e))),
+                just(Tok::Star)
+                    .ignore_then(unary.clone())
+                    .map(|e| Expr::Deref(Box::new(e))),
+                primary.clone(),
+            ))
+        });
+
+        // binary
+        unary
+            .clone()
+            .then(add_op.then(unary).repeated())
             .foldl(|lhs, (op, rhs)| match op {
                 AddOp::Plus => Expr::Add(Box::new(lhs), Box::new(rhs)),
                 AddOp::Minus => Expr::Sub(Box::new(lhs), Box::new(rhs)),
-                AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)),
+                AddOp::And => Expr::And(Box::new(lhs), Box::new(rhs)), // binaire &
                 AddOp::Or => Expr::Or(Box::new(lhs), Box::new(rhs)),
                 AddOp::LShift => Expr::LShift(Box::new(lhs), Box::new(rhs)),
                 AddOp::RShift => Expr::RShift(Box::new(lhs), Box::new(rhs)),
@@ -167,28 +194,39 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             })
     });
 
-    let u32_ty = just(Tok::U32).to(Type::U32);
-    let ret_ty = choice((
-        just(Tok::Void).to(Type::Void),
-        just(Tok::U32).to(Type::U32),
+    let base_ty = choice((
+        just(Tok::Void).to(BaseType::Void),
+        just(Tok::U32).to(BaseType::U32),
     ));
+
+    let ty = base_ty
+        .then(just(Tok::Star).repeated())
+        .map(|(base, stars)| Type { base, ptr: stars.len() as u32 });
 
     // u32 x = expr;
     let decl_stmt =
-        u32_ty.clone()
+        ty.clone()
         .then(ident.clone())
         .then_ignore(just(Tok::Eq))
         .then(expr.clone())
         .then_ignore(just(Tok::Semi))
         .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
 
+    let lvalue =
+        choice((
+            ident.clone().map(Expr::Var),
+            just(Tok::Star)
+                .ignore_then(expr.clone())
+                .map(|e| Expr::Deref(Box::new(e))),
+        ));
+
     // x = expr;
     let assign_stmt =
-        ident.clone()
+        lvalue
         .then_ignore(just(Tok::Eq))
         .then(expr.clone())
         .then_ignore(just(Tok::Semi))
-        .map(|(name, value)| Stmt::Assign { name, value });
+        .map(|(target, value)| Stmt::Assign { target, value });
 
     let return_stmt =
         just(Tok::Return)
@@ -235,7 +273,7 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         .then_ignore(just(Tok::RBrace));
 
     let param =
-        u32_ty.clone()
+        ty.clone()
         .then(ident.clone())
         .map(|(ty, name)| (ty, name));
 
@@ -247,7 +285,7 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         .map(|p| p.unwrap_or_default());
         
     let function =
-        ret_ty
+        ty
         .then(ident.clone())
         .then_ignore(just(Tok::LParen))
         .then(params)
