@@ -249,6 +249,9 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
             writeln!(out, "load r1 [r0]")?;
             writeln!(out, "push r1")?;
         },
+        Expr::Str(string) => {
+            panic!("You cannot do that here !");
+        }
     }
 
     Ok(())
@@ -266,13 +269,44 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             writeln!(out, "push r1")?;
             writeln!(out, "ret")?;
         }
+        // special case for strings (and lists maybe later?)
+        Stmt::Decl { ty, name, init: Expr::Str(string) } => {
+            writeln!(out, "; u32* {} = \"{}\" (string case)", name, string)?;
+            assert!(ty.base == BaseType::U32 && ty.ptr == 1);
+
+            let addr = variables_table.get(&(fun_name.clone(), name.clone())).unwrap();
+
+            let mut cur = *addr; // copie locale
+
+            // we put the pointer value
+            writeln!(out, "copy r0 {}", cur)?;
+            writeln!(out, "copy r1 {}", cur + 4)?;
+            writeln!(out, "store [r0] r1")?;
+
+            cur += 4;
+
+            // we put the string value just after
+            for ch in string.chars() {
+                // write character
+                writeln!(out, "copy r0 {}", cur)?;
+                writeln!(out, "copy r1 {}", ch as u8)?;
+                writeln!(out, "store [r0] r1")?;
+                cur += 4;
+            }
+            // we write 0 too !
+            writeln!(out, "copy r0 {}", cur)?;
+            writeln!(out, "copy r1 0")?;
+            writeln!(out, "store [r0] r1")?;
+
+        }
         Stmt::Decl { ty, name, init: expr } => {
             assert!(!(ty.base == BaseType::Void && ty.ptr == 0)); // we cant assign to void
             writeln!(out, "; u32 {} = {:?}", name, expr)?;
             // main work
             compile_expr(out, expr, fun_name, variables_table)?;
             // r0 is the addr, r1 is the value
-            writeln!(out, "copy r0 {}", variables_table.get(&(fun_name.clone(), name.clone())).unwrap())?;
+            let addr = variables_table.get(&(fun_name.clone(), name.clone())).unwrap();
+            writeln!(out, "copy r0 {}", addr)?;
             writeln!(out, "pop r1 ; the stack contains the value of {}", name)?;
             writeln!(out, "store [r0] r1")?;
         }
@@ -427,6 +461,7 @@ pub fn codegen(ast: Program) -> Result<String, String> {
         variables_table: &mut HashMap<(String, String), u32>,
         func_name: &str,
         var_name: &str,
+        init: Option<&Expr>,
         ty: &Type,
         addr: &mut u32,
     ) -> Result<(), String> {
@@ -437,8 +472,20 @@ pub fn codegen(ast: Program) -> Result<String, String> {
             return Err(format!("Invalid declaration: variable `{}` already exists", var_name));
         }
 
-        variables_table.insert(key, *addr);
-        *addr += 4;
+        // we add some place for the new var depending on the content
+        match init {
+            Some(Expr::Str(string)) => {
+                variables_table.insert(key, *addr);
+                // one for the \0, one for the pointer
+                let offset = 2;
+                *addr += (4 * (string.chars().count() + offset)) as u32;
+            },
+            _ => {
+                variables_table.insert(key, *addr);
+                *addr += 4;
+            },
+        }
+
         Ok(())
     }
 
@@ -449,8 +496,8 @@ pub fn codegen(ast: Program) -> Result<String, String> {
         addr: &mut u32,
     ) -> Result<(), String> {
         match stmt {
-            Stmt::Decl { ty, name, .. } => {
-                declare_var(variables_table, fun_name, name, ty, addr)?;
+            Stmt::Decl { ty, name, init } => {
+                declare_var(variables_table, fun_name, name, Some(init), ty, addr)?;
             }
 
             Stmt::If { body, .. } => {
@@ -492,6 +539,7 @@ pub fn codegen(ast: Program) -> Result<String, String> {
                 &mut variables_table,
                 &func.name,
                 param_name,
+                None,
                 param_ty,
                 &mut addr,
             )?;

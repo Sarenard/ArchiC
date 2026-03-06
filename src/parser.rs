@@ -10,6 +10,7 @@ pub enum Tok {
     Return,
 
     Ident(String),
+    StrLit(String),
     IntLit(i64),
 
     LParen,
@@ -89,7 +90,39 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         .unwrapped()
         .map(Tok::IntLit);
 
-    let int = choice((hex, dec));
+    let escaped_char = just('\\').ignore_then(choice((
+        just('n').to('\n'),
+        just('r').to('\r'),
+        just('t').to('\t'),
+        just('0').to('\0'),
+        just('\\').to('\\'),
+        just('\'').to('\''),
+        just('"').to('"'),
+    )));
+
+    let char_lit = just('\'')
+        .ignore_then(choice((
+            escaped_char.clone(),
+            filter(|c: &char| *c != '\'' && *c != '\n' && *c != '\\'),
+        )))
+        .then_ignore(just('\''))
+        .map(|c| Tok::IntLit(c as i64));
+
+    let string_lit = just('"')
+        .ignore_then(
+            choice((
+                escaped_char.map(|c| c.to_string()),
+                filter(|c: &char| *c != '"' && *c != '\n' && *c != '\\')
+                    .map(|c| c.to_string()),
+            ))
+            .repeated()
+            .collect::<Vec<_>>()
+            .map(|parts| parts.concat()),
+        )
+        .then_ignore(just('"'))
+        .map(Tok::StrLit);
+
+    let int = choice((hex, dec, char_lit));
 
     let punct = choice((
         just("==").to(Tok::BinEq),
@@ -118,8 +151,11 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just('&').to(Tok::AddrOf),
     ));
 
-    choice((ident, int, punct))
-        .padded_by(ignored)
+    let token = choice((ident, string_lit, int, punct));
+
+    ignored.clone()
+        .ignore_then(token)
+        .then_ignore(ignored)
         .repeated()
         .then_ignore(end())
 }
@@ -128,6 +164,8 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
     let ident = select! { Tok::Ident(name) => name };
     
     let int = select! { Tok::IntLit(n) => n };
+
+    let string = select! { Tok::StrLit(s) => s };
 
     let add_op = select! {
         Tok::Plus => AddOp::Plus,
@@ -169,6 +207,7 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
         // primary = call | int | var | (expr)
         let primary = choice((
             call,
+            string.map(Expr::Str),
             int.map(Expr::Int),
             ident.clone().map(Expr::Var),
             paren,

@@ -823,12 +823,21 @@ u32 main() {
 
     u32* text = "Je suis Sarah !";
 
-    u32 i = 0;
-    while (*text) {
-        printchar(fastmul(i, 8), 0, *text, green);
-        text = text + 4;
-        i = i + 1;
-    }
+    printchar(0, 0,   'J', green);
+    printchar(8, 0,   'e', green);
+    printchar(16, 0,  ' ', green);
+    printchar(24, 0,  's', green);
+    printchar(32, 0,  'u', green);
+    printchar(40, 0,  'i', green);
+    printchar(48, 0,  's', green);
+    printchar(56, 0,  ' ', green);
+    printchar(64, 0,  'S', green);
+    printchar(72, 0,  'a', green);
+    printchar(80, 0,  'r', green);
+    printchar(88, 0,  'a', green);
+    printchar(96, 0,  'h', green);
+    printchar(104, 0, ' ', green);
+    printchar(112, 0, '!', green);
 
     while (1) {}
 

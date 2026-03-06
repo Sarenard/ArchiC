@@ -42,6 +42,7 @@ pub enum Expr {
     GT(Box<Expr>, Box<Expr>),
     LT(Box<Expr>, Box<Expr>),
 
+    Str(String),
 
 }
 
