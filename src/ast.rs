@@ -52,6 +52,12 @@ pub enum Stmt {
     Assign { target: Expr, value: Expr },
     If { cond: Expr, body: Vec<Stmt> },
     While { cond: Expr, body: Vec<Stmt> },
+    For {
+        init: Option<Box<Stmt>>,
+        cond: Option<Expr>,
+        step: Option<Box<Stmt>>,
+        body: Vec<Stmt>,
+    },
 
     Expr(Expr),
 }

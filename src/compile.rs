@@ -362,6 +362,45 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             // TODO : dont do that if statement is void function
             writeln!(out, "pop r0 ; pop to not grow the stack")?;
         },
+        Stmt::For {init, cond, step, body} => {
+            writeln!(out, "; for({:?}; {:?}; {:?})", init, cond, step)?;
+            // initial setup
+            match init {
+                Some(inner) => {
+                    compile_stmt(out, inner, fun_name, variables_table);
+                },
+                None => {},
+            }
+            // the main part of the loop
+            let label = new_label();
+            writeln!(out, "for_{}_check:", label)?;
+            match cond {
+                Some(inner) => {
+                    compile_expr(out, inner, fun_name, variables_table)?;
+                    writeln!(out, "pop r0")?;
+                    writeln!(out, "skip 1 ifeq r0 0")?;
+                    writeln!(out, "jump for_{}_true", label)?;
+                    writeln!(out, "jump for_{}_end", label)?;
+                    writeln!(out, "for_{}_true:", label)?;
+                }
+                None => {
+                    writeln!(out, "jump for_{}_true", label)?;
+                },
+            }
+            // content of the for
+            for smt in body {
+                compile_stmt(out, smt, fun_name, variables_table)?;
+            }
+            match step {
+                Some(inner) => {
+                    compile_stmt(out, inner, fun_name, variables_table);
+                },
+                None => {},
+            }
+            writeln!(out, "jump for_{}_check", label)?;
+
+            writeln!(out, "for_{}_end:", label)?;
+        }
     }
 
     Ok(())
@@ -403,6 +442,49 @@ pub fn codegen(ast: Program) -> Result<String, String> {
         Ok(())
     }
 
+    fn collect_decls_in_stmt(
+        stmt: &Stmt,
+        variables_table: &mut HashMap<(String, String), u32>, // remplace par ton type exact
+        fun_name: &str,
+        addr: &mut u32,
+    ) -> Result<(), String> {
+        match stmt {
+            Stmt::Decl { ty, name, .. } => {
+                declare_var(variables_table, fun_name, name, ty, addr)?;
+            }
+
+            Stmt::If { body, .. } => {
+                for s in body {
+                    collect_decls_in_stmt(s, variables_table, fun_name, addr)?;
+                }
+            }
+
+            Stmt::While { body, .. } => {
+                for s in body {
+                    collect_decls_in_stmt(s, variables_table, fun_name, addr)?;
+                }
+            }
+
+            // si tu as ajouté For { init, cond, step, body }
+            Stmt::For { init, step, body, .. } => {
+                if let Some(init) = init.as_deref() {
+                    collect_decls_in_stmt(init, variables_table, fun_name, addr)?;
+                }
+                if let Some(step) = step.as_deref() {
+                    collect_decls_in_stmt(step, variables_table, fun_name, addr)?;
+                }
+                for s in body {
+                    collect_decls_in_stmt(s, variables_table, fun_name, addr)?;
+                }
+            }
+
+            // si tu as d'autres nœuds contenant des sous-statements, ajoute-les ici
+
+            _ => {}
+        }
+        Ok(())
+    }
+
     for func in &ast.funcs {
         // params
         for (param_ty, param_name) in &func.params {
@@ -415,20 +497,9 @@ pub fn codegen(ast: Program) -> Result<String, String> {
             )?;
         }
 
-        // decls dans le body
+        // decls partout dans le body (récursif)
         for stmt in &func.body {
-            match stmt {
-                Stmt::Decl { ty, name, .. } => {
-                    declare_var(
-                        &mut variables_table,
-                        &func.name,
-                        name,
-                        ty,
-                        &mut addr,
-                    )?;
-                }
-                _ => {}
-            }
+            collect_decls_in_stmt(stmt, &mut variables_table, &func.name, &mut addr)?;
         }
     }
 

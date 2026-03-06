@@ -36,6 +36,7 @@ pub enum Tok {
     Comma,
     Star,
     AddrOf,
+    For,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,21 +56,34 @@ enum AddOp {
 }
 
 fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
+    let comment = just("//")
+        .ignore_then(filter(|c: &char| *c != '\n').repeated())
+        .ignored();
+
+    let ws = one_of(" \t\r\n").repeated().at_least(1).ignored();
+
+    let ignored = choice((ws, comment)).repeated();
+
     let ident = text::ident().map(|s: String| match s.as_str() {
         "void" => Tok::Void,
         "return" => Tok::Return,
         "u32" => Tok::U32,
         "if" => Tok::If,
         "while" => Tok::While,
+        "for" => Tok::For,
         _ => Tok::Ident(s),
     });
 
     let hex = just("0x")
         .or(just("0X"))
-        .ignore_then(text::digits(16))
-        .map(|s: String| Tok::IntLit(i64::from_str_radix(&s, 16).unwrap()));
+        .ignore_then(
+            filter(|c: &char| c.is_ascii_hexdigit())
+                .repeated()
+                .at_least(1)
+                .collect::<String>(),
+        )
+        .map(|s| Tok::IntLit(i64::from_str_radix(&s, 16).unwrap()));
 
-    // base 10
     let dec = text::int(10)
         .from_str()
         .unwrapped()
@@ -87,7 +101,6 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just("&&").to(Tok::And),
         just("||").to(Tok::Or),
 
-        // mono-char ensuite
         just('(').to(Tok::LParen),
         just(')').to(Tok::RParen),
         just('{').to(Tok::LBrace),
@@ -106,7 +119,7 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
     ));
 
     choice((ident, int, punct))
-        .padded()
+        .padded_by(ignored)
         .repeated()
         .then_ignore(end())
 }
@@ -222,17 +235,32 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
 
     // x = expr;
     let assign_stmt =
-        lvalue
+        lvalue.clone()
         .then_ignore(just(Tok::Eq))
         .then(expr.clone())
         .then_ignore(just(Tok::Semi))
         .map(|(target, value)| Stmt::Assign { target, value });
 
+    // u32 x = expr   (sans ; )
+    let decl_no_semi =
+        ty.clone()
+        .then(ident.clone())
+        .then_ignore(just(Tok::Eq))
+        .then(expr.clone())
+        .map(|((ty, name), init)| Stmt::Decl { ty, name, init });
+
+    // lvalue = expr   (sans ; )
+    let assign_no_semi =
+        lvalue.clone()
+        .then_ignore(just(Tok::Eq))
+        .then(expr.clone())
+        .map(|(target, value)| Stmt::Assign { target, value });
+
     let return_stmt =
         just(Tok::Return)
-            .ignore_then(expr.clone())
-            .then_ignore(just(Tok::Semi))
-            .map(Stmt::Return);
+        .ignore_then(expr.clone())
+        .then_ignore(just(Tok::Semi))
+        .map(Stmt::Return);
 
     let expr_stmt =
         expr.clone()
@@ -264,7 +292,40 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
                 )
                 .map(|(cond, body)| Stmt::While { cond, body });
 
-        choice((decl_stmt.clone(), assign_stmt, return_stmt.clone(), if_stmt, while_stmt, expr_stmt.clone()))
+        let for_stmt =
+            just(Tok::For)
+            .ignore_then(just(Tok::LParen))
+            .ignore_then(
+                // init: decl | assign | (vide)
+                choice((
+                    decl_no_semi.clone().map(|s| Some(Box::new(s))),
+                    assign_no_semi.clone().map(|s| Some(Box::new(s))),
+                    empty().to(None),
+                ))
+            )
+            .then_ignore(just(Tok::Semi))
+            .then(
+                // cond: expr | vide
+                expr.clone().or_not()
+            )
+            .then_ignore(just(Tok::Semi))
+            .then(
+                // step: assign | expr-stmt (optionnel) | vide
+                choice((
+                    assign_no_semi.clone().map(|s| Some(Box::new(s))),
+                    expr.clone().map(Stmt::Expr).map(|s| Some(Box::new(s))),
+                    empty().to(None),
+                ))
+            )
+            .then_ignore(just(Tok::RParen))
+            .then(
+                just(Tok::LBrace)
+                    .ignore_then(stmt.clone().repeated())
+                    .then_ignore(just(Tok::RBrace))
+            )
+            .map(|(((init, cond), step), body)| Stmt::For { init, cond, step, body });
+
+        choice((decl_stmt.clone(), assign_stmt, return_stmt.clone(), if_stmt, while_stmt, for_stmt, expr_stmt.clone()))
     });
 
     let block =

@@ -13,7 +13,7 @@ u32 fastmul(u32 a, u32 b) {
     return tot;
 }
 
-void set_pixel(u32 x, u32 y, u32 color) {
+void plot(u32 x, u32 y, u32 color) {
     u32 mem = 0x01000000;
 
     mem = mem + fastmul(x, 4);
@@ -21,9 +21,10 @@ void set_pixel(u32 x, u32 y, u32 color) {
 
     *mem = color;
 }
-
 u32 main() {
-    set_pixel(200, 200, 0x0000FF00);
+    u32 green = 0x0000FF00;
+
+    plot(100, 100, green);
 
     while (1) {}
 
