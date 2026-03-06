@@ -269,9 +269,11 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             writeln!(out, "push r1")?;
             writeln!(out, "ret")?;
         }
+
         // special case for strings (and lists maybe later?)
         Stmt::Decl { ty, name, init: Expr::Str(string) } => {
-            writeln!(out, "; u32* {} = \"{}\" (string case)", name, string)?;
+            let escaped = string.escape_default().to_string();
+            writeln!(out, "; u32* {} = \"{}\" (string case)", name, escaped)?;
             assert!(ty.base == BaseType::U32 && ty.ptr == 1);
 
             let addr = variables_table.get(&(fun_name.clone(), name.clone())).unwrap();
@@ -298,7 +300,12 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             writeln!(out, "copy r1 0")?;
             writeln!(out, "store [r0] r1")?;
 
-        }
+        },
+        // special
+        Stmt::Assign { target, value: Expr::Str(string) } => {
+            todo!()
+        },
+
         Stmt::Decl { ty, name, init: expr } => {
             assert!(!(ty.base == BaseType::Void && ty.ptr == 0)); // we cant assign to void
             writeln!(out, "; u32 {} = {:?}", name, expr)?;

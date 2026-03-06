@@ -818,6 +818,52 @@ void printchar(u32 x, u32 y, u32 char, u32 color) {
     draw(x, y, r4, color);
 }
 
+void scancode_to_char(u32 scancode) {
+    if (scancode == 10) { return '1'; }
+    if (scancode == 11) { return '2'; }
+    if (scancode == 12) { return '3'; }
+    if (scancode == 13) { return '4'; }
+    if (scancode == 14) { return '5'; }
+    if (scancode == 15) { return '6'; }
+    if (scancode == 16) { return '7'; }
+    if (scancode == 17) { return '8'; }
+    if (scancode == 18) { return '9'; }
+    if (scancode == 19) { return '0'; }
+
+    if (scancode == 24) { return 'a'; }
+    if (scancode == 25) { return 'z'; }
+    if (scancode == 26) { return 'e'; }
+    if (scancode == 27) { return 'r'; }
+    if (scancode == 28) { return 't'; }
+    if (scancode == 29) { return 'y'; }
+    if (scancode == 30) { return 'u'; }
+    if (scancode == 31) { return 'i'; }
+    if (scancode == 32) { return 'o'; }
+    if (scancode == 33) { return 'p'; }
+
+    if (scancode == 65) { return ' '; }
+    if (scancode == 36) { return 10; } // newline
+    if (scancode == 22) { return 8; } // break
+
+    if (scancode == 38) { return 'q'; }
+    if (scancode == 39) { return 's'; }
+    if (scancode == 40) { return 'd'; }
+    if (scancode == 41) { return 'f'; }
+    if (scancode == 42) { return 'g'; }
+    if (scancode == 43) { return 'h'; }
+    if (scancode == 44) { return 'j'; }
+    if (scancode == 45) { return 'k'; }
+    if (scancode == 46) { return 'l'; }
+    if (scancode == 47) { return 'm'; }
+
+    if (scancode == 52) { return 'w'; }
+    if (scancode == 53) { return 'x'; }
+    if (scancode == 54) { return 'c'; }
+    if (scancode == 55) { return 'v'; }
+    if (scancode == 56) { return 'b'; }
+    if (scancode == 57) { return 'n'; }
+}
+
 void print(u32* text, u32* color) {
     u32 i = 0;
     while (*text) {
@@ -827,14 +873,40 @@ void print(u32* text, u32* color) {
     }
 }
 
+void sleep(u32 time) {
+    for (u32 i = 0; i < time; i = i + 1) {
+
+    }
+}
+
 u32 main() {
     u32 green = 0x0000FF00;
 
-    u32* text = "Coucou, je suis Sarah !!";
+    u32* text = "Petite demo du clavier :";
 
     print(text, green);
 
-    while (1) {}
+    u32* keyboard = 0x01200000;
+
+    u32 x = 0;
+    u32 y = 16;
+
+    u32 char = 0;
+
+    while (1) {
+        if (*keyboard) {
+            char = scancode_to_char(*keyboard);
+            if (char == 10) {
+                y = y + 16;
+                x = 0;
+            }
+            if (char != 10) {
+                printchar(x, y, char, green);
+                x = x + 8;
+            }
+            sleep(1000);
+        }
+    }
 
     return 0;
 }
