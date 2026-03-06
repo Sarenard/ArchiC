@@ -1,14 +1,31 @@
-void fill_green() {
+u32 fastmul(u32 a, u32 b) {
+    u32 tot = 0;
+
+    while (a) {
+        if (a && 1) {
+            tot = tot + b;
+        }
+
+        a = a >> 1;
+        b = b << 1;
+    }
+
+    return tot;
+}
+
+void set_pixel(u32 x, u32 y, u32 color) {
     u32 mem = 0x01000000;
 
-    while (1) {
-        *mem = 0x0000FF00;
-        mem = mem + 4;
-    }
+    mem = mem + fastmul(x, 4);
+    mem = mem + fastmul(y, fastmul(640, 4));
+
+    *mem = color;
 }
 
 u32 main() {
-    fill_green();
+    set_pixel(200, 200, 0x0000FF00);
+
+    while (1) {}
 
     return 0;
 }

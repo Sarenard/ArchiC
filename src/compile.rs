@@ -16,8 +16,8 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
     match expr {
         Expr::Int(i) => {
             // if the val is too big we need to be a little smarter
-            writeln!(out, "let r0 {};", &i)?;
-            writeln!(out, "push r0;")?;
+            writeln!(out, "let r0 {}", &i)?;
+            writeln!(out, "push r0")?;
         },
         Expr::Var(name) => {
             // r0 is the addr, r1 is the value
@@ -222,7 +222,7 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
                     ret
             */
             // push of args
-            for arg in args {
+            for arg in args.iter().rev() {
                 compile_expr(out, arg, fun_name, variables_table)?;
             }
             // call
@@ -359,6 +359,7 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
         Stmt::Expr(expr) => {
             writeln!(out, "; raw expr ({:?})", expr)?;
             compile_expr(out, expr, fun_name, variables_table)?;
+            // TODO : dont do that if statement is void function
             writeln!(out, "pop r0 ; pop to not grow the stack")?;
         },
     }
@@ -372,7 +373,8 @@ pub fn codegen(ast: Program) -> Result<String, String> {
 
     let mut main_func = String::new();
 
-    let mut addr: u32 = 0; // start of the heap
+    // after the program, before the stack, before the zone that is annoying to parse
+    let mut addr: u32 = 0x0000EFFC;
     let mut variables_table: HashMap<(String, String), u32> = HashMap::new();
 
     fn ensure_not_void(ty: &Type, name: &str) -> Result<(), String> {
@@ -462,6 +464,10 @@ pub fn codegen(ast: Program) -> Result<String, String> {
         match func.return_ty {
             Type { base: BaseType::Void, ptr: _ptr } => {
                 writeln!(&mut body, "; Eh its fine we are in a void func").unwrap();
+                writeln!(&mut body, "; we push a NULL").unwrap();
+                writeln!(&mut body, "pop r0 ; we push a NULL").unwrap();
+                writeln!(&mut body, "push 0").unwrap();
+                writeln!(&mut body, "push r0").unwrap();
                 writeln!(&mut body, "ret").unwrap();
             },
             _ => {
