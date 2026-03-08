@@ -34,6 +34,14 @@ void draw(u32 x, u32 y, u32 thing, u32 color) {
     }
 }
 
+void rectfill(u32 x1, u32 y1, u32 x2, u32 y2, u32 color) {
+    for (u32 x = x1; x < x2; x = x + 1) {
+        for (u32 y = y1; y < y2; y = y + 1) {
+            plot(x, y, color);
+        }
+    }
+}
+
 void printchar(u32 x, u32 y, u32 char, u32 color) {
     u32 r1 = 0;
     u32 r2 = 0;
@@ -881,6 +889,7 @@ void sleep(u32 time) {
 
 u32 main() {
     u32 green = 0x0000FF00;
+    u32 black = 0x00000000;
 
     u32* text = "Petite demo du clavier :";
 
@@ -889,25 +898,45 @@ u32 main() {
     u32* keyboard = 0x01200000;
 
     u32 x = 0;
+    u32 old_x = 0;
     u32 y = 16;
+
+    u32 ok = 0;
 
     u32 char = 0;
     u32 old_char = 0;
 
     while (1) {
-        if (*keyboard) {
-            char = scancode_to_char(*keyboard);
-            if (char != old_char) {
-                if (char == 10) {
-                    y = y + 16;
-                    x = 0;
-                }
-                if (char != 10) {
-                    printchar(x, y, char, green);
-                    x = x + 8;
-                }
-                old_char = char;
+        char = scancode_to_char(*keyboard);
+        if (char != old_char) {
+            if (char == 10) {
+                y = y + 16;
+                old_x = x;
+                x = 0;
             }
+            if (char == 8) {
+                ok = 1;
+                if (ok && (x > 0)) {
+                    ok = 0;
+                    x = x - 8;
+                    rectfill(x, y, x+8, y+16, black);
+                }
+                if (ok && (x == 0)) {
+                    ok = 0;
+                    if (y > 16) { // plus loin que la 2e ligne
+                        y = y - 16;
+                        x = old_x;
+                    }
+                }
+            }
+            if (char == 0) {
+
+            }
+            if ((char != 10) && (char != 8) && (char != 0)) {
+                printchar(x, y, char, green);
+                x = x + 8;
+            }
+            old_char = char;
         }
     }
 
