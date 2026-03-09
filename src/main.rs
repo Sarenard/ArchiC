@@ -10,12 +10,14 @@ fn main() -> ExitCode {
     let src = match args.get(1) {
         Some(path) => path,
         None => {
-            eprintln!("Usage: {} <program.ac>", args[0]);
+            eprintln!("Usage: {} <program.ac> [--original]", args[0]);
             return ExitCode::FAILURE;
         }
     };
 
-    if let Err(e) = bisare(src.into()) {
+    let original = args.iter().any(|a| a == "--original");
+
+    if let Err(e) = bisare(src.into(), original) {
         eprintln!("error: {e}");
         return ExitCode::FAILURE;
     }

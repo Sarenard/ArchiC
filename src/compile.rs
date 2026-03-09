@@ -658,13 +658,13 @@ rloop:
     Ok(assembly_output)
 }
 
-pub fn bisare(main_ac: PathBuf) -> std::io::Result<()> {
+pub fn bisare(main_ac: PathBuf, original: bool) -> std::io::Result<()> {
     let src = fs::read_to_string(&main_ac)?;
     let main_asm = main_ac.with_extension("asm");
     let main_bin = main_ac.with_extension("bin");
 
     let ast = parser::parse_program(&src)
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let codegened = codegen(ast).unwrap();
 
@@ -675,17 +675,40 @@ pub fn bisare(main_ac: PathBuf) -> std::io::Result<()> {
         .arg(&main_asm)
         .status()?;
 
-    let mut child = Command::new("python3")
-        .arg("bisare/sim.py")
-        .arg(&main_bin)
-        .stdin(Stdio::piped())
-        .spawn()?;
+    let main_bin_abs = std::fs::canonicalize(&main_bin)?;
 
-    if let Some(stdin) = &mut child.stdin {
-        stdin.write_all(b"run\n")?;
+    if original {
+        let mut child = Command::new("python3")
+            .arg("bisare/sim.py")
+            .arg(&main_bin_abs)
+            .stdin(Stdio::piped())
+            .spawn()?;
+
+        if let Some(stdin) = &mut child.stdin {
+            stdin.write_all(b"run\n")?;
+        }
+
+        let status = child.wait()?;
+        if !status.success() {
+            return Err(std::io::Error::other(format!(
+                "original simulator failed with status {status}"
+            )));
+        }
+    } else {
+        let status = Command::new("cargo")
+            .arg("run")
+            .arg("--release")
+            .arg("--")
+            .arg(&main_bin_abs)
+            .current_dir("bisare_sim_rs")
+            .status()?;
+
+        if !status.success() {
+            return Err(std::io::Error::other(format!(
+                "bisare_sim_rs failed with status {status}"
+            )));
+        }
     }
-
-    let _ = child.wait();
 
     Ok(())
 }
