@@ -38,6 +38,9 @@ pub enum Tok {
     Star,
     AddrOf,
     For,
+
+    LBracket,
+    RBracket,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,6 +144,8 @@ fn lexer() -> impl Parser<char, Vec<Tok>, Error = Simple<char>> {
         just(';').to(Tok::Semi),
         just(',').to(Tok::Comma),
         just('*').to(Tok::Star),
+        just('[').to(Tok::LBracket),
+        just(']').to(Tok::RBracket),
 
         just('<').to(Tok::LT),
         just('>').to(Tok::GT),
@@ -204,9 +209,21 @@ fn parser() -> impl Parser<Tok, Program, Error = Simple<Tok>> {
             .then_ignore(just(Tok::RParen))
             .map(|(name, args)| Expr::Call { name, args });
 
+        let array_lit = just(Tok::LBrace)
+            .ignore_then(
+                expr.clone()
+                    .separated_by(just(Tok::Comma))
+                    .allow_trailing()
+                    .or_not()
+                    .map(|xs| xs.unwrap_or_default())
+            )
+            .then_ignore(just(Tok::RBrace))
+            .map(Expr::ArrayLit);
+
         // primary = call | int | var | (expr)
         let primary = choice((
             call,
+            array_lit,
             string.map(Expr::Str),
             int.map(Expr::Int),
             ident.clone().map(Expr::Var),

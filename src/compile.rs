@@ -249,7 +249,10 @@ fn compile_expr(out: &mut String, expr : &Expr, fun_name: &String, variables_tab
             writeln!(out, "load r1 [r0]")?;
             writeln!(out, "push r1")?;
         },
-        Expr::Str(string) => {
+        Expr::Str(_string) => {
+            panic!("You cannot do that here !");
+        }
+        Expr::ArrayLit(_arr) => {
             panic!("You cannot do that here !");
         }
     }
@@ -301,8 +304,40 @@ fn compile_stmt(out: &mut String, stmt: &Stmt, fun_name: &String, variables_tabl
             writeln!(out, "store [r0] r1")?;
 
         },
+        Stmt::Decl { ty, name, init: Expr::ArrayLit(arr) } => {
+            writeln!(out, "; u32* {} = \"{:?}\" (list case)", name, arr)?;
+            assert!(ty.base == BaseType::U32 && ty.ptr == 1);
+
+            let addr = variables_table.get(&(fun_name.clone(), name.clone())).unwrap();
+
+            let mut cur = *addr; // copie locale
+
+            // we put the pointer value
+            writeln!(out, "copy r0 {}", cur)?;
+            writeln!(out, "copy r1 {}", cur + 4)?;
+            writeln!(out, "store [r0] r1")?;
+
+            cur += 4;
+
+            // we put the list values just after
+            for ch in arr {
+                match ch {
+                    Expr::Int(val) => {
+                        // write int
+                        writeln!(out, "copy r0 {}", cur)?;
+                        writeln!(out, "copy r1 {}", *val as u8)?;
+                        writeln!(out, "store [r0] r1")?;
+                        cur += 4;
+                    },
+                    _ => panic!("This cannot be here !")
+                }
+            }
+        }
         // special
-        Stmt::Assign { target, value: Expr::Str(string) } => {
+        Stmt::Assign { target, value: Expr::Str(_string) } => {
+            todo!()
+        },
+        Stmt::Assign { target, value: Expr::ArrayLit(_arr) } => {
             todo!()
         },
 
@@ -486,6 +521,12 @@ pub fn codegen(ast: Program) -> Result<String, String> {
                 // one for the \0, one for the pointer
                 let offset = 2;
                 *addr += (4 * (string.chars().count() + offset)) as u32;
+            },
+            Some(Expr::ArrayLit(arr)) => {
+                variables_table.insert(key, *addr);
+                // one for the pointer
+                let offset = 1;
+                *addr += (4 * (arr.len() + offset)) as u32;
             },
             _ => {
                 variables_table.insert(key, *addr);

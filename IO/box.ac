@@ -54,7 +54,6 @@ void rectfill(u32 x1, u32 y1, u32 x2, u32 y2, u32 color) {
     }
 }
 
-// TODO : with a list
 void printchar(u32 x, u32 y, u32 char, u32 color) {
     u32 r1 = 0;
     u32 r2 = 0;
@@ -894,7 +893,18 @@ void print(u32* text, u32* color) {
     }
 }
 
-void render(u32 x, u32 y, u32 color) {
+void render(u32 x, u32 y, u32 oldx, u32 oldy, u32 color) {
+    
+    u32 black = 0x00000000;
+
+    rectfill(
+        fastmul(oldx, 16),
+        fastmul(oldy, 16),
+        fastmul(oldx + 1, 16),
+        fastmul(oldy + 1, 16),
+        black
+    );
+
     rectfill(
         fastmul(x, 16),
         fastmul(y, 16),
@@ -908,88 +918,68 @@ u32 main() {
     u32 green = 0x0000FF00;
     u32 black = 0x00000000;
     u32 red = 0x000000FF;
-    u32 blue = 0x00FF0000;
-    u32 orange = 0x0000A5FF;
 
     u32* keyboard = 0x01200000;
+
+    u32 oldx = 1;
+    u32 x = 1;
+    u32 oldy = 1;
+    u32 y = 1;
+
     u32 render_now = 1;
 
     u32 cur_char = 0;
     u32 old_char = 0;
-
-    u32* grid = {
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 
-        0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 
-        0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 
-        0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 
-        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    };
     
-    // red box
     for (u32 i1 = 0; i1 < 40; i1 = i1 + 1) {
-        render(i1, 0, red);
-        render(i1, 29, red);
+        render(i1, 0, 1, 1, red);
+        render(i1, 29, 1, 1, red);
     }
 
     for (u32 i2 = 0; i2 < 30; i2 = i2 + 1) {
-        render(0, i2, red);
-        render(39, i2, red);
+        render(0, i2, 1, 1, red);
+        render(39, i2, 1, 1, red);
     }
 
-    // background
-    u32 color = blue;
-    for (u32 i = 0; i < 10; i = i + 1) {
-        for (u32 j = 0; j < 22; j = j + 1) {
-
-            if (((i + j) && 1) == 0) {
-                color = blue;
-            } 
-            if (((i + j) && 1) != 0) {
-                color = orange;
-            }
-
-            render(1 + i, 1 + j, color);
-        }
-    }
-
-    // main loop
     while (1) {
         cur_char = scancode_to_char(*keyboard);
         if (cur_char != old_char) {
-            // here we handle the newchar
-            if (cur_char == '\n') {
-                render_now = 1;
+            if (cur_char == 'q') {
+                if (x > 1) {
+                    oldx = x;
+                    oldy = y;
+                    x = x - 1;
+                    render_now = 1;
+                }
+            }
+            if (cur_char == 'd') {
+                if (x < 38) {
+                    oldx = x;
+                    oldy = y;
+                    x = x + 1;
+                    render_now = 1;
+                }
+            }
+            if (cur_char == 'z') {
+                if (y > 1) {
+                    oldx = x;
+                    oldy = y;
+                    y = y - 1;
+                    render_now = 1;
+                }
+            }
+            if (cur_char == 's') {
+                if (y < 28) {
+                    oldx = x;
+                    oldy = y;
+                    y = y + 1;
+                    render_now = 1;
+                }
             }
             old_char = cur_char;
         }
         if (render_now == 1) {
-            // here we render the frame
-            for (u32 y = 0; y < 22; y = y + 1) {
-                for (u32 x = 0; x < 10; x = x + 1) {
-                    u32 idx = fastmul(fastmul(y, 10) + x, 4);
-
-                    if (*(grid+idx) != 0) {
-                        render(x+1, y+1, red);
-                    }
-                }
-            }
+            render(x, y, oldx, oldy, green);
             render_now = 0;
         }
     }

@@ -43,7 +43,7 @@ pub enum Expr {
     LT(Box<Expr>, Box<Expr>),
 
     Str(String),
-
+    ArrayLit(Vec<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

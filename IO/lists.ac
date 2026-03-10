@@ -906,91 +906,12 @@ void render(u32 x, u32 y, u32 color) {
 
 u32 main() {
     u32 green = 0x0000FF00;
-    u32 black = 0x00000000;
-    u32 red = 0x000000FF;
-    u32 blue = 0x00FF0000;
-    u32 orange = 0x0000A5FF;
 
-    u32* keyboard = 0x01200000;
-    u32 render_now = 1;
+    u32* arr = {99,111,117,99,111,117,32,106,101,32,115,117,105,115,32,115,97,114,97,104};
 
-    u32 cur_char = 0;
-    u32 old_char = 0;
-
-    u32* grid = {
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 
-        0, 0, 1, 0, 1, 0, 1, 0, 0, 0, 
-        0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 
-        0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 
-        0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-    };
-    
-    // red box
-    for (u32 i1 = 0; i1 < 40; i1 = i1 + 1) {
-        render(i1, 0, red);
-        render(i1, 29, red);
-    }
-
-    for (u32 i2 = 0; i2 < 30; i2 = i2 + 1) {
-        render(0, i2, red);
-        render(39, i2, red);
-    }
-
-    // background
-    u32 color = blue;
-    for (u32 i = 0; i < 10; i = i + 1) {
-        for (u32 j = 0; j < 22; j = j + 1) {
-
-            if (((i + j) && 1) == 0) {
-                color = blue;
-            } 
-            if (((i + j) && 1) != 0) {
-                color = orange;
-            }
-
-            render(1 + i, 1 + j, color);
-        }
-    }
-
-    // main loop
     while (1) {
-        cur_char = scancode_to_char(*keyboard);
-        if (cur_char != old_char) {
-            // here we handle the newchar
-            if (cur_char == '\n') {
-                render_now = 1;
-            }
-            old_char = cur_char;
-        }
-        if (render_now == 1) {
-            // here we render the frame
-            for (u32 y = 0; y < 22; y = y + 1) {
-                for (u32 x = 0; x < 10; x = x + 1) {
-                    u32 idx = fastmul(fastmul(y, 10) + x, 4);
-
-                    if (*(grid+idx) != 0) {
-                        render(x+1, y+1, red);
-                    }
-                }
-            }
-            render_now = 0;
+        for (u32 i = 0; i < 20; i = i + 1) {
+            printchar(fastmul(8, i), 0, *(arr+fastmul(4, i)), green);
         }
     }
 
